@@ -1,0 +1,18 @@
+startCommand:
+  type: stdio
+  configSchema:
+    type: object
+    properties:
+      meshyApiKey:
+        type: string
+        description: "Your Meshy API key (starts with msy_)"
+    required:
+      - meshyApiKey
+  commandFunction: |-
+    (config) => ({
+      command: "npx",
+      args: ["-y", "meshy-mcp-server"],
+      env: {
+        MESHY_API_KEY: config.meshyApiKey
+      }
+    })

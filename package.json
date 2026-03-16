@@ -1,0 +1,65 @@
+{
+  "name": "meshy-mcp-server",
+  "version": "1.0.0",
+  "description": "MCP server for Meshy AI 3D generation platform",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "meshy-mcp-server": "dist/index.js"
+  },
+  "files": [
+    "dist/",
+    "skill/",
+    "LICENSE",
+    "README.md",
+    ".env.example"
+  ],
+  "scripts": {
+    "start": "node dist/index.js",
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "clean": "rm -rf dist",
+    "lint": "tsc --noEmit",
+    "prepublishOnly": "npm run clean && npm run build"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Arlieeee/meshy-mcp-server.git"
+  },
+  "author": "Meshy (https://www.meshy.ai)",
+  "homepage": "https://github.com/Arlieeee/meshy-mcp-server#readme",
+  "bugs": {
+    "url": "https://github.com/Arlieeee/meshy-mcp-server/issues"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.6.1",
+    "axios": "^1.7.9",
+    "dotenv": "^17.3.1",
+    "express": "^4.18.2",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  },
+  "keywords": [
+    "mcp",
+    "meshy",
+    "3d-generation",
+    "ai",
+    "model-context-protocol",
+    "3d-model",
+    "text-to-3d",
+    "image-to-3d"
+  ]
+}

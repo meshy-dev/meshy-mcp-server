@@ -1,0 +1,15 @@
+src/
+.github/
+.env
+.env.local
+.env.example
+tsconfig.json
+smithery.yaml
+*.tsbuildinfo
+*.tgz
+.DS_Store
+.vscode/
+.idea/
+*.swp
+*.swo
+npm-debug.log*
