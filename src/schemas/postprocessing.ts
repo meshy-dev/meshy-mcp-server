@@ -17,9 +17,9 @@ export const RemeshInputSchema = z.object({
   model_url: UrlSchema
     .optional()
     .describe("Direct URL to a model file to remesh"),
-  target_formats: z.array(z.nativeEnum(RemeshFormat))
-    .default([RemeshFormat.GLB])
-    .describe("Output formats to generate (default: ['glb'])"),
+  target_formats: z.array(z.enum(["glb", "fbx", "obj", "usdz", "blend", "stl", "3mf"]))
+    .default(["glb"])
+    .describe("Output formats to generate (default: ['glb']). NOTE: 3MF is NOT included by default — you MUST explicitly include '3mf' to receive it."),
   topology: z.nativeEnum(Topology)
     .optional()
     .describe("Mesh topology type (quad or triangle)"),
@@ -31,10 +31,13 @@ export const RemeshInputSchema = z.object({
     .describe("Target polygon count for the remeshed model (100–300,000)"),
   resize_height: z.number()
     .default(0)
-    .describe("Resize model to this height in meters (0 = no resize)"),
+    .describe("Resize model to this height in meters (0 = no resize). Mutually exclusive with auto_size."),
+  auto_size: z.boolean()
+    .optional()
+    .describe("Use AI to auto-estimate real-world height. Mutually exclusive with resize_height. Default false."),
   origin_at: z.nativeEnum(OriginAt)
     .optional()
-    .describe("Where to place the model origin: 'bottom' or 'center'"),
+    .describe("Where to place the model origin: 'bottom' or 'center'. Default 'bottom' when auto_size is true."),
   convert_format_only: z.boolean()
     .default(false)
     .describe("Only convert format without remeshing"),
@@ -71,6 +74,9 @@ export const RetextureInputSchema = z.object({
   remove_lighting: z.boolean()
     .default(true)
     .describe("Removes highlights and shadows from the base color texture for cleaner results under custom lighting. Default true. Only supported when ai_model is meshy-6 or latest"),
+  target_formats: z.array(z.enum(["glb", "obj", "fbx", "stl", "usdz", "3mf"]))
+    .optional()
+    .describe("Output formats to generate. When omitted, produces glb/obj/fbx/stl/usdz but NOT 3mf. To get 3MF, you MUST include '3mf' explicitly."),
   response_format: ResponseFormatSchema
 }).strict();
 

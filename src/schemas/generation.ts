@@ -4,6 +4,14 @@
 
 import { z } from "zod";
 import { AIModel, ModelType, SymmetryMode, Topology, PoseMode } from "../constants.js";
+
+/**
+ * Shared target_formats schema.
+ * 3MF is NOT included in default output — must be explicitly requested.
+ */
+const TargetFormatsSchema = z.array(z.enum(["glb", "obj", "fbx", "stl", "usdz", "3mf"]))
+  .optional()
+  .describe("Output formats to generate. When omitted, produces glb/obj/fbx/stl/usdz but NOT 3mf. To get 3MF, you MUST include '3mf' explicitly (e.g. [\"glb\", \"3mf\"]). Specifying formats can reduce task completion time.");
 import {
   ResponseFormatSchema,
   PromptSchema,
@@ -39,6 +47,13 @@ export const TextTo3DInputSchema = z.object({
   pose_mode: z.nativeEnum(PoseMode)
     .optional()
     .describe("Pose mode for character models: 'a-pose' or 't-pose'. IMPORTANT: When the user intends to rig or animate the model, default to 't-pose' for best rigging results"),
+  target_formats: TargetFormatsSchema,
+  auto_size: z.boolean()
+    .optional()
+    .describe("Use AI to auto-estimate real-world height and resize the model. Default false."),
+  origin_at: z.enum(["bottom", "center"])
+    .optional()
+    .describe("Origin position: 'bottom' or 'center'. Default 'bottom' when auto_size is true."),
   response_format: ResponseFormatSchema
 }).strict();
 
@@ -98,6 +113,13 @@ export const ImageTo3DInputSchema = z.object({
   save_pre_remeshed_model: z.boolean()
     .optional()
     .describe("Store GLB before remeshing. Default false. Only applies when should_remesh is true"),
+  target_formats: TargetFormatsSchema,
+  auto_size: z.boolean()
+    .optional()
+    .describe("Use AI to auto-estimate real-world height and resize the model. Default false."),
+  origin_at: z.enum(["bottom", "center"])
+    .optional()
+    .describe("Origin position: 'bottom' or 'center'. Default 'bottom' when auto_size is true."),
   response_format: ResponseFormatSchema
 }).strict();
 
@@ -124,6 +146,13 @@ export const TextTo3DRefineInputSchema = z.object({
   remove_lighting: z.boolean()
     .default(true)
     .describe("Removes highlights and shadows from the base color texture for cleaner results under custom lighting. Default true. Only supported when ai_model is meshy-6 or latest"),
+  target_formats: TargetFormatsSchema,
+  auto_size: z.boolean()
+    .optional()
+    .describe("Use AI to auto-estimate real-world height and resize the model. Default false."),
+  origin_at: z.enum(["bottom", "center"])
+    .optional()
+    .describe("Origin position: 'bottom' or 'center'. Default 'bottom' when auto_size is true."),
   response_format: ResponseFormatSchema
 }).strict();
 
@@ -187,5 +216,12 @@ export const MultiImageTo3DInputSchema = z.object({
   save_pre_remeshed_model: z.boolean()
     .optional()
     .describe("Store GLB before remeshing. Default false. Only applies when should_remesh is true"),
+  target_formats: TargetFormatsSchema,
+  auto_size: z.boolean()
+    .optional()
+    .describe("Use AI to auto-estimate real-world height and resize the model. Default false."),
+  origin_at: z.enum(["bottom", "center"])
+    .optional()
+    .describe("Origin position: 'bottom' or 'center'. Default 'bottom' when auto_size is true."),
   response_format: ResponseFormatSchema
 }).strict();

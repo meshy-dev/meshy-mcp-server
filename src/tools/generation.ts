@@ -41,26 +41,26 @@ Args:
   - symmetry_mode (enum, optional): "off", "auto" (default), or "on"
   - should_remesh (boolean, optional): Whether to remesh. Default false for meshy-6, true for others
   - pose_mode (enum, optional): "a-pose" or "t-pose". IMPORTANT: Use "t-pose" when the user intends to rig or animate the model
+  - target_formats (string[], optional): Output formats. Default: all except 3mf. For 3D printing white model, pass ["obj"].
+  - auto_size (boolean, optional): AI auto-estimate real-world height. Default false.
+  - origin_at (enum, optional): "bottom" or "center". Default "bottom" when auto_size is true.
   - response_format (enum): Output format - "markdown" or "json" (default: "markdown")
 
+Workflow: This creates a PREVIEW (untextured mesh). After completion, ask the user if they want to add textures via meshy_text_to_3d_refine. Preview and refine ai_model should match — all models (meshy-5, meshy-6, latest) support both preview and refine.
+
+For 3D printing: pass target_formats: ["obj"] to only generate OBJ format (faster).
+For rigging/animation: use pose_mode: "t-pose" for best results.
+
 Returns:
-  {
-    "task_id": "abc-123-def",           // Use this to poll status
-    "status": "PENDING",                // Initial status
-    "message": "Task created...",       // Human-readable message
-    "estimated_time": "2-3 minutes"     // Estimated completion time
-  }
+  { "task_id": "abc-123-def", "status": "PENDING", "estimated_time": "2-3 minutes" }
 
 Next Steps:
-  After creating a task, use meshy_get_task_status with the task_id to poll progress.
+  Use meshy_get_task_status with the task_id to wait for completion.
 
 Examples:
   - "Create a low-poly dragon" → { prompt: "dragon", model_type: "lowpoly" }
-  - "Generate a realistic cat" → { prompt: "cat", ai_model: "meshy-6" }
-
-Error Handling:
-  - Returns "InsufficientCredits" if account needs upgrade
-  - Returns "TooManyPendingTasks" if too many tasks running`,
+  - "Generate for 3D print" → { prompt: "cat", target_formats: ["obj"] }
+  - "Character for animation" → { prompt: "warrior", pose_mode: "t-pose" }`,
       inputSchema: TextTo3DInputSchema,
       outputSchema: TaskCreatedOutputSchema,
       annotations: {
@@ -98,6 +98,11 @@ Error Handling:
         if (params.pose_mode) {
           request.pose_mode = params.pose_mode;
         }
+        if (params.target_formats) {
+          request.target_formats = params.target_formats;
+        }
+        if (params.auto_size !== undefined) request.auto_size = params.auto_size;
+        if (params.origin_at) request.origin_at = params.origin_at;
 
         // Create task via API
         const response = await client.post<CreateTaskApiResponse>("/openapi/v2/text-to-3d", request as unknown as Record<string, unknown>);
@@ -222,6 +227,11 @@ Error Handling:
         if (params.save_pre_remeshed_model !== undefined) {
           request.save_pre_remeshed_model = params.save_pre_remeshed_model;
         }
+        if (params.target_formats) {
+          request.target_formats = params.target_formats;
+        }
+        if (params.auto_size !== undefined) request.auto_size = params.auto_size;
+        if (params.origin_at) request.origin_at = params.origin_at;
 
         // Create task via API (image-to-3d uses v1, not v2)
         const response = await client.post<CreateTaskApiResponse>("/openapi/v1/image-to-3d", request as unknown as Record<string, unknown>);
@@ -269,17 +279,17 @@ Args:
   - enable_pbr (boolean): Enable physically-based rendering textures (default: false)
   - texture_prompt (string, optional): Text to guide texturing. Max 600 characters
   - texture_image_url (string, optional): Image URL to guide texturing
-  - ai_model (enum): AI model - "meshy-5", "meshy-6", or "latest" (default). Ask user which model before proceeding
+  - ai_model (enum): AI model - "meshy-5", "meshy-6", or "latest" (default). Should match the preview's ai_model to avoid model mismatch errors.
   - remove_lighting (boolean, optional): Remove highlights/shadows from base color texture. Default true. Only meshy-6/latest
+  - target_formats (string[], optional): Output formats. Default: all except 3mf.
+  - auto_size (boolean, optional): AI auto-estimate real-world height. Default false.
+  - origin_at (enum, optional): "bottom" or "center".
   - response_format (enum): Output format - "markdown" or "json" (default: "markdown")
 
+IMPORTANT: The ai_model used for refine should match the preview's ai_model. All models (meshy-5, meshy-6, latest) support refine.
+
 Returns:
-  {
-    "task_id": "abc-123-def",
-    "status": "PENDING",
-    "message": "Refine task created...",
-    "estimated_time": "2-3 minutes"
-  }
+  { "task_id": "abc-123-def", "status": "PENDING", "estimated_time": "2-3 minutes" }
 
 Next Steps:
   Use meshy_get_task_status with task_id and task_type="text-to-3d" to check progress.
@@ -287,11 +297,7 @@ Next Steps:
 Examples:
   - Basic refine: { preview_task_id: "abc-123" }
   - With PBR: { preview_task_id: "abc-123", enable_pbr: true }
-  - Guided texture: { preview_task_id: "abc-123", texture_prompt: "rusty metal" }
-
-Error Handling:
-  - Returns "NotFound" if preview_task_id doesn't exist
-  - Returns error if preview task is not yet completed`,
+  - Guided texture: { preview_task_id: "abc-123", texture_prompt: "rusty metal" }`,
       inputSchema: TextTo3DRefineInputSchema,
       outputSchema: TaskCreatedOutputSchema,
       annotations: {
@@ -319,6 +325,11 @@ Error Handling:
         if (params.remove_lighting !== undefined) {
           request.remove_lighting = params.remove_lighting;
         }
+        if (params.target_formats) {
+          request.target_formats = params.target_formats;
+        }
+        if (params.auto_size !== undefined) request.auto_size = params.auto_size;
+        if (params.origin_at) request.origin_at = params.origin_at;
 
         const response = await client.post<CreateTaskApiResponse>("/openapi/v2/text-to-3d", request as unknown as Record<string, unknown>);
         const taskId = response.result;
@@ -421,6 +432,9 @@ Error Handling:
         if (params.image_enhancement !== undefined) request.image_enhancement = params.image_enhancement;
         if (params.remove_lighting !== undefined) request.remove_lighting = params.remove_lighting;
         if (params.save_pre_remeshed_model !== undefined) request.save_pre_remeshed_model = params.save_pre_remeshed_model;
+        if (params.target_formats) request.target_formats = params.target_formats;
+        if (params.auto_size !== undefined) request.auto_size = params.auto_size;
+        if (params.origin_at) request.origin_at = params.origin_at;
 
         const response = await client.post<CreateTaskApiResponse>("/openapi/v1/multi-image-to-3d", request as unknown as Record<string, unknown>);
         const taskId = response.result;

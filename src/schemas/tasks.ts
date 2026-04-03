@@ -59,7 +59,7 @@ export const DownloadModelInputSchema = z.object({
   task_type: TaskTypeSchema,
   format: z.enum(["glb", "fbx", "usdz", "stl", "obj", "3mf"])
     .default("glb")
-    .describe("Model format to download. '3mf' is not yet supported — will prompt user to download OBJ instead for 3D printing."),
+    .describe("Model format to download. IMPORTANT: Ask the user which format they need before downloading. Recommendations: GLB (general viewing), OBJ (white model printing), 3MF (multicolor printing), FBX (game engines/animation), USDZ (AR/Apple). Do NOT download all formats."),
   include_textures: z.boolean()
     .default(true)
     .describe("Include texture files in response"),
@@ -68,7 +68,13 @@ export const DownloadModelInputSchema = z.object({
     .describe("Override auto-save path with a custom ABSOLUTE path. If omitted, auto-saves to meshy_output/{timestamp}_{prompt}_{id}/. Example: /Users/me/models/chair.glb"),
   parent_task_id: z.string()
     .optional()
-    .describe("Parent task ID for chaining (e.g., preview_task_id for refine, input_task_id for rig). Places output in the same project folder as the parent.")
+    .describe("Parent task ID for chaining (e.g., preview_task_id for refine, input_task_id for rig). Places output in the same project folder as the parent."),
+  print_ready: z.boolean()
+    .optional()
+    .describe("If true and format is OBJ, auto-fix coordinates for 3D printing: rotates Y-up to Z-up, scales to target height, centers on XY, aligns bottom to Z=0. Default false."),
+  print_height_mm: z.number()
+    .optional()
+    .describe("Target height in mm when print_ready is true. Default 75. Adjust per user request (e.g. 'print at 15cm' → 150).")
 }).strict();
 
 /**

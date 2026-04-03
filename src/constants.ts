@@ -80,7 +80,8 @@ export enum TaskType {
   RIGGING = "rigging",
   ANIMATION = "animation",
   TEXT_TO_IMAGE = "text-to-image",
-  IMAGE_TO_IMAGE = "image-to-image"
+  IMAGE_TO_IMAGE = "image-to-image",
+  MULTI_COLOR_PRINT = "multi-color-print"
 }
 
 // Remesh Output Formats
@@ -114,11 +115,29 @@ export enum AspectRatio {
   PORTRAIT_STANDARD = "3:4"
 }
 
-// Slicer Types (only Bambu Studio is supported via URL scheme in agent/skill mode;
-// for other slicers, visit meshy.ai webapp for one-click send)
+// Slicer Types
 export enum SlicerType {
-  BAMBU = "bambu"
+  AUTO = "auto",
+  BAMBU = "bambu",
+  ORCASLICER = "orcaslicer",
+  CREALITY_PRINT = "creality_print",
+  ELEGOO_SLICER = "elegoo_slicer",
+  ANYCUBIC_SLICER = "anycubic_slicer",
+  PRUSASLICER = "prusaslicer",
+  CURA = "cura"
 }
+
+// Slicers that support multi-color printing (AMS/MMU)
+export const MULTICOLOR_CAPABLE_SLICERS: SlicerType[] = [
+  SlicerType.ORCASLICER,
+  SlicerType.BAMBU,
+  SlicerType.CREALITY_PRINT,
+  SlicerType.ELEGOO_SLICER,
+  SlicerType.ANYCUBIC_SLICER
+];
+
+// Multi-color processing credit cost
+export const MULTI_COLOR_CREDITS = 10;
 
 // Animation Post Process Operations
 export enum AnimationPostProcessOp {
@@ -149,7 +168,7 @@ export const POLL_INITIAL_DELAY = 5000; // 5 seconds
 export const POLL_MAX_DELAY = 30000; // 30 seconds
 export const POLL_BACKOFF_FACTOR = 1.5;
 export const POLL_FINALIZATION_DELAY = 15000; // 15s when progress >= 95%
-export const POLL_DEFAULT_TIMEOUT = 180000; // 3 minutes
+export const POLL_DEFAULT_TIMEOUT = 300000; // 5 minutes
 export const POLL_MAX_TIMEOUT = 300000; // 5 minutes
 
 // Rigging Constraints

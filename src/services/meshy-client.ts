@@ -135,7 +135,8 @@ export async function fetchTaskByIdFromKnownEndpoints(
     "/openapi/v1/rigging",
     "/openapi/v1/animations",
     "/openapi/v1/text-to-image",
-    "/openapi/v1/image-to-image"
+    "/openapi/v1/image-to-image",
+    "/openapi/v1/print/multi-color"
   ];
 
   for (const endpoint of endpoints) {

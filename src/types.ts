@@ -44,6 +44,9 @@ export interface TextTo3DApiRequest {
   symmetry_mode?: string;
   should_remesh?: boolean;
   pose_mode?: string;
+  target_formats?: string[];
+  auto_size?: boolean;
+  origin_at?: string;
 }
 
 // Image-to-3D API request body
@@ -64,6 +67,9 @@ export interface ImageTo3DApiRequest {
   image_enhancement?: boolean;
   remove_lighting?: boolean;
   save_pre_remeshed_model?: boolean;
+  target_formats?: string[];
+  auto_size?: boolean;
+  origin_at?: string;
 }
 
 // Text-to-3D Refine API request body
@@ -75,6 +81,9 @@ export interface TextTo3DRefineApiRequest {
   texture_prompt?: string;
   texture_image_url?: string;
   remove_lighting?: boolean;
+  target_formats?: string[];
+  auto_size?: boolean;
+  origin_at?: string;
 }
 
 // Multi-Image-to-3D API request body
@@ -95,6 +104,9 @@ export interface MultiImageTo3DApiRequest {
   image_enhancement?: boolean;
   remove_lighting?: boolean;
   save_pre_remeshed_model?: boolean;
+  target_formats?: string[];
+  auto_size?: boolean;
+  origin_at?: string;
 }
 
 // Remesh API request body
@@ -106,6 +118,7 @@ export interface RemeshApiRequest {
   model_url?: string;
   topology?: string;
   target_polycount?: number;
+  auto_size?: boolean;
   origin_at?: string;
 }
 
@@ -119,6 +132,7 @@ export interface RetextureApiRequest {
   image_style_url?: string;
   ai_model?: string;
   remove_lighting?: boolean;
+  target_formats?: string[];
 }
 
 // Rig API request body
@@ -137,6 +151,13 @@ export interface AnimateApiRequest {
     operation_type: string;
     fps?: number;
   };
+}
+
+// Multi-Color Print API request body
+export interface MultiColorPrintApiRequest {
+  input_task_id: string;
+  max_colors?: number;
+  max_depth?: number;
 }
 
 // Text-to-Image API request body
@@ -178,6 +199,7 @@ export interface Task {
     mtl?: string;
     blend?: string;
     stl?: string;
+    "3mf"?: string;
   };
   thumbnail_url?: string;
   texture_urls?: TextureUrlsObject[] | TextureUrlsObject;

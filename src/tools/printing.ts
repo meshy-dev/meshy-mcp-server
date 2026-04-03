@@ -11,14 +11,21 @@ import {
   AnalyzePrintabilityInputSchema,
   ProcessMulticolorInputSchema
 } from "../schemas/printing.js";
-import { ResponseFormat } from "../constants.js";
+import { ResponseFormat, SlicerType, MULTICOLOR_CAPABLE_SLICERS } from "../constants.js";
+import { CreateTaskApiResponse, MultiColorPrintApiRequest } from "../types.js";
+import { formatTaskCreatedResponse } from "../utils/response-formatter.js";
+import {
+  detectInstalledSlicers,
+  detectSlicer,
+  getBestMulticolorSlicer,
+  DetectedSlicer
+} from "../utils/slicer-detector.js";
 
 /**
- * Build Bambu Studio URL scheme.
+ * Build Bambu Studio URL scheme (kept for backward compat).
  */
 function buildBambuStudioUrl(modelUrl: string, fileName: string): string {
   const urlWithFragment = `${modelUrl}#/${fileName}`;
-  // macOS uses bambustudioopen://, others use bambustudio://open?file=
   const isMac = process.platform === "darwin";
   if (isMac) {
     return `bambustudioopen://${encodeURIComponent(urlWithFragment)}`;
@@ -27,41 +34,56 @@ function buildBambuStudioUrl(modelUrl: string, fileName: string): string {
 }
 
 /**
+ * Format detected slicers into a markdown table.
+ */
+function formatSlicerTable(slicers: DetectedSlicer[]): string {
+  if (slicers.length === 0) return "No slicers detected.";
+  const rows = slicers.map(s =>
+    `| ${s.displayName} | ${s.supportsMulticolor ? "Yes" : "No"} | \`${s.path}\` |`
+  );
+  return `| Slicer | Multicolor | Path |
+|--------|-----------|------|
+${rows.join("\n")}`;
+}
+
+/**
  * Register 3D printing tools with the MCP server
  */
-export function registerPrintingTools(server: McpServer, _client: MeshyClient) {
-  // Send to slicer tool
+export function registerPrintingTools(server: McpServer, client: MeshyClient) {
+  // ── Send to Slicer ──────────────────────────────────────────────
   server.registerTool(
     "meshy_send_to_slicer",
     {
       title: "Send Model to 3D Printing Slicer",
-      description: `Send a 3D model to Bambu Studio via URL scheme, or provide 3MF download for other slicers.
+      description: `Detect installed 3D printing slicer software and return launch commands.
 
-Currently only Bambu Studio supports one-click URL scheme launch. For other slicers (OrcaSlicer, Cura, Creality Print, etc.), visit the Meshy webapp (meshy.ai) for more one-click send options.
+IMPORTANT: This tool should be called as the FIRST STEP in any 3D printing workflow — before generating the model. Save the result and reuse it at the end to open the model in the user's chosen slicer.
+
+Supports 7 slicers: OrcaSlicer, Bambu Studio, Creality Print, Elegoo Slicer, Anycubic Slicer Next, PrusaSlicer, UltiMaker Cura.
+Multicolor-capable: OrcaSlicer, Bambu Studio, Creality Print, Elegoo Slicer, Anycubic Slicer Next.
+
+Usage pattern:
+1. Call this tool at the START of a print workflow to detect slicers
+2. Present detected slicers to the user
+3. Generate and download the model
+4. At the END, ask user which slicer to use from the detected list
+5. Take the launch_command, replace {file} with the local file path, execute via Bash
 
 Args:
-  - model_url (string): Download URL of the model file (required)
-  - slicer_type (string): Target slicer. Only "bambu" supports one-click launch. For any other value, provides 3MF download with manual import instructions. (default: "bambu")
+  - model_url (string): Download URL of the model file (can be a placeholder at detection time)
+  - slicer_type (enum): 'auto' (default, detect all) or a specific slicer
   - file_name (string): File name for the model (default: "meshy_model.3mf")
-  - response_format (enum): Output format - "markdown" or "json" (default: "markdown")
+  - is_multicolor (boolean): If true, only recommends multicolor-capable slicers (default: false)
+  - response_format (enum): "markdown" or "json" (default: "markdown")
 
-Returns (Bambu Studio):
+Returns:
   {
-    "slicer_url": "bambustudio://open?file=...",
-    "slicer_name": "Bambu Studio",
-    "model_url": "https://...",
-    "instructions": "Open the URL to launch Bambu Studio..."
+    "detected_slicers": [{"name": "OrcaSlicer", "launch_command": "open -a \\"OrcaSlicer\\" \\"{file}\\"", ...}],
+    "recommended_slicer": {"name": "...", "launch_command": "..."},
+    "model_url": "https://..."
   }
 
-Returns (other slicers):
-  {
-    "model_url": "https://...",
-    "instructions": "Download the 3MF file and open it in your slicer..."
-  }
-
-Examples:
-  - Send to Bambu: { model_url: "https://cdn.meshy.ai/model.3mf" }
-  - Other slicer: { model_url: "https://cdn.meshy.ai/model.3mf", slicer_type: "orcaslicer" }`,
+The launch_command contains {file} as placeholder. Replace it with the actual local file path before executing via Bash.`,
       inputSchema: SendToSlicerInputSchema,
       annotations: {
         readOnlyHint: true,
@@ -72,77 +94,96 @@ Examples:
     },
     async (params: z.infer<typeof SendToSlicerInputSchema>) => {
       try {
-        // Bambu Studio: generate URL scheme for one-click launch
-        if (params.slicer_type === "bambu") {
-          const slicerUrl = buildBambuStudioUrl(params.model_url, params.file_name);
-
-          const output = {
-            slicer_url: slicerUrl,
-            slicer_name: "Bambu Studio",
-            model_url: params.model_url,
-            instructions: `Open the following URL to launch Bambu Studio with the model loaded. On macOS, you can run: open "${slicerUrl}"`
-          };
-
-          let textContent: string;
-          if (params.response_format === ResponseFormat.MARKDOWN) {
-            textContent = `# Send to Bambu Studio
-
-**Slicer URL**:
-\`\`\`
-${output.slicer_url}
-\`\`\`
-
-**Instructions**:
-${output.instructions}
-
-**Reminders**:
-- Make sure Bambu Studio is installed on your computer
-- Check print settings (layer height, infill, supports) in the slicer before printing
-- The model URL is temporary and will expire after 24 hours`;
-          } else {
-            textContent = JSON.stringify(output, null, 2);
-          }
-
-          return {
-            content: [{ type: "text", text: textContent }],
-            structuredContent: output
-          };
+        // Step 1: Detect slicers
+        let detected: DetectedSlicer[] = [];
+        if (params.slicer_type === "auto") {
+          detected = detectInstalledSlicers();
+        } else {
+          const specific = detectSlicer(params.slicer_type as SlicerType);
+          if (specific) detected = [specific];
         }
 
-        // Non-Bambu slicers: provide 3MF download link and manual import guidance
+        // Step 2: Filter for multicolor if requested
+        if (params.is_multicolor) {
+          detected = detected.filter(s => s.supportsMulticolor);
+        }
+
+        // Step 3: Pick recommended slicer
+        const recommended = params.is_multicolor
+          ? getBestMulticolorSlicer(detected)
+          : (detected[0] || null);
+
+        // Step 4: Build launch command with actual file name
+        const slicerList = detected.map(s => ({
+          name: s.displayName,
+          type: s.type,
+          path: s.path,
+          supports_multicolor: s.supportsMulticolor,
+          launch_command: s.launchCommand.replace("{file}", params.model_url),
+          url_scheme: s.urlScheme
+        }));
+
+        const recommendedOutput = recommended ? {
+          name: recommended.displayName,
+          type: recommended.type,
+          launch_command: recommended.launchCommand.replace("{file}", params.model_url),
+          supports_multicolor: recommended.supportsMulticolor
+        } : null;
+
+        // Bambu URL scheme as bonus
+        const bambuSlicer = detected.find(s => s.type === SlicerType.BAMBU);
+        const bambuUrlScheme = bambuSlicer
+          ? buildBambuStudioUrl(params.model_url, params.file_name)
+          : undefined;
+
         const output = {
+          detected_slicers: slicerList,
+          recommended_slicer: recommendedOutput,
           model_url: params.model_url,
           file_name: params.file_name,
-          requested_slicer: params.slicer_type,
-          instructions: `Download the 3MF file and open it directly in your slicer software. Most slicers support double-clicking a .3mf file to open it.`
+          bambu_url_scheme: bambuUrlScheme,
+          is_multicolor: params.is_multicolor
         };
 
         let textContent: string;
         if (params.response_format === ResponseFormat.MARKDOWN) {
-          textContent = `# 3MF Download for Slicer Import
+          if (detected.length === 0) {
+            const slicerSuggestions = params.is_multicolor
+              ? "OrcaSlicer, Bambu Studio, Creality Print, Elegoo Slicer, or Anycubic Slicer Next"
+              : "OrcaSlicer, Bambu Studio, PrusaSlicer, UltiMaker Cura, or others";
+            textContent = `# No Slicer Detected
 
-Currently the agent/skill only supports one-click launch for **Bambu Studio**. For more one-click send options, visit the Meshy webapp at **meshy.ai**.
+No ${params.is_multicolor ? "multicolor-capable " : ""}slicer software was found on this system.
 
-## How to Import
+**Recommended slicers to install**: ${slicerSuggestions}
 
-1. **Download** the 3MF file from the URL below
-2. **Open** the downloaded \`.3mf\` file — most slicers will auto-launch when you double-click it
-3. Alternatively, open your slicer and use **File → Import** to load the file
+**Manual steps**:
+1. Download the model from: ${params.model_url}
+2. Install a slicer from the list above
+3. Open the downloaded file in the slicer: File → Import → select the file`;
+          } else {
+            const launchCmd = recommendedOutput?.launch_command || "";
+            textContent = `# Slicer Detection Result
 
-**Download URL**:
-${params.model_url}
+## Detected Slicers
 
-**File Name**: ${params.file_name}
+${formatSlicerTable(detected)}
 
-**Common Slicer Import Methods**:
-- **OrcaSlicer**: File → Import → select .3mf file
-- **Cura**: File → Open File(s) → select .3mf file
-- **Creality Print**: File → Open → select .3mf file
-- **PrusaSlicer**: File → Import → select .3mf file
+## Recommended: ${recommendedOutput?.name || "None"}
+
+**Launch command** (execute via Bash):
+\`\`\`
+${launchCmd}
+\`\`\`
+
+**Model URL**: ${params.model_url}
+**File Name**: ${params.file_name}${bambuUrlScheme ? `\n\n**Bambu Studio URL Scheme**:\n\`\`\`\n${bambuUrlScheme}\n\`\`\`` : ""}
 
 **Reminders**:
-- The download URL is temporary and will expire after 24 hours
-- Check print settings (layer height, infill, supports) before printing`;
+- Execute the launch command above to open the model in the slicer
+- Check print settings (layer height, infill, supports) in the slicer before printing
+- The model URL is temporary and will expire after 24 hours`;
+          }
         } else {
           textContent = JSON.stringify(output, null, 2);
         }
@@ -163,7 +204,7 @@ ${params.model_url}
     }
   );
 
-  // Analyze printability tool (placeholder)
+  // ── Analyze Printability (placeholder) ──────────────────────────
   server.registerTool(
     "meshy_analyze_printability",
     {
@@ -174,7 +215,7 @@ Currently returns a manual checklist for print readiness. Will be replaced with 
 
 Args:
   - task_id (string): Task ID of the completed model to analyze (required)
-  - task_type (enum): Task type (default: "text-to-3d")
+  - task_type (string): Task type (default: "text-to-3d")
   - response_format (enum): Output format - "markdown" or "json" (default: "markdown")
 
 Returns:
@@ -206,7 +247,7 @@ Examples:
         ];
 
         const recommendations = [
-          "Import the 3MF file into your slicer to check for mesh errors",
+          "Import the model file into your slicer to check for mesh errors",
           "Use the slicer's built-in repair tool if issues are detected",
           "Consider adding supports for overhanging features",
           "Scale the model appropriately for your printer's build volume",
@@ -259,84 +300,76 @@ ${recommendations.map((r, i) => `${i + 1}. ${r}`).join("\n")}`;
     }
   );
 
-  // Process multicolor tool (placeholder)
+  // ── Process Multicolor (real API) ───────────────────────────────
   server.registerTool(
     "meshy_process_multicolor",
     {
       title: "Process Multi-Color 3D Print",
-      description: `[PLACEHOLDER] Process a 3D model for multi-color 3D printing.
+      description: `Process a textured 3D model for multi-color 3D printing. Cost: 10 credits.
 
-Currently returns multi-color printing guidance. Will be replaced with automated color separation when the Meshy multi-color API becomes available.
+Segments the model's texture into discrete color regions and creates a task that outputs a 3MF file ready for multi-color slicers (OrcaSlicer, Bambu Studio, Creality Print, Elegoo Slicer, Anycubic Slicer Next).
+
+PREREQUISITES:
+  - The input model MUST have textures. Run meshy_text_to_3d_refine or meshy_retexture first.
+  - A multicolor-capable slicer should be installed on the user's system.
+
+IMPORTANT: Before calling, ask the user to confirm:
+  - max_colors: depends on their printer's multi-color capability (e.g. Bambu AMS supports 4-16 colors). Ask how many colors they want.
+  - max_depth: affects color boundary precision and file size. Higher = finer but larger. Ask user's preference or suggest default 4.
 
 Args:
-  - task_id (string): Task ID of the completed model to process (required)
-  - task_type (enum): Task type (default: "text-to-3d")
-  - num_colors (number): Number of colors to process (2-16, default: 4)
-  - response_format (enum): Output format - "markdown" or "json" (default: "markdown")
+  - input_task_id (string): Task ID of a completed TEXTURED model (required)
+  - max_colors (number): Max colors for segmentation (1-16, default: 4). MUST confirm with user based on their printer capability.
+  - max_depth (number): Segmentation depth (3-6, default: 4). Higher = finer separation, larger file. MUST confirm with user.
+  - response_format (enum): "markdown" or "json" (default: "markdown")
 
 Returns:
-  {
-    "status": "guidance_only",
-    "num_colors": 4,
-    "suggestions": [ ... ]
-  }
+  { "task_id": "...", "status": "PENDING", ... }
+
+Next Steps:
+  1. Use meshy_get_task_status with task_id and task_type="multi-color-print" to wait for completion
+  2. The completed task will have a 3MF download URL in model_urls
+  3. Use meshy_download_model with format="3mf" to download
+  4. Use meshy_send_to_slicer with is_multicolor=true to open the 3MF in a multicolor slicer
 
 Examples:
-  - Process 4-color: { task_id: "abc-123", task_type: "text-to-3d", num_colors: 4 }`,
+  - Default: { input_task_id: "abc-123" }
+  - Custom: { input_task_id: "abc-123", max_colors: 8, max_depth: 5 }`,
       inputSchema: ProcessMulticolorInputSchema,
       annotations: {
-        readOnlyHint: true,
+        readOnlyHint: false,
         destructiveHint: false,
-        idempotentHint: true,
+        idempotentHint: false,
         openWorldHint: true
       }
     },
     async (params: z.infer<typeof ProcessMulticolorInputSchema>) => {
       try {
-        const suggestions = [
-          `Use a multi-color capable printer (e.g., Bambu Lab AMS, Prusa MMU) for ${params.num_colors}-color printing`,
-          "Retexture the model with distinct color regions using meshy_retexture before export",
-          "In your slicer, use the color painting tool to manually assign filament colors to different regions",
-          "Consider using a single-extruder printer with manual filament swaps at specific layer heights",
-          "For resin printing, consider painting the model after printing for best color results"
-        ];
-
-        const output = {
-          task_id: params.task_id,
-          status: "guidance_only",
-          message: "Automated multi-color processing is not yet available. See suggestions below.",
-          num_colors: params.num_colors,
-          suggestions
+        const request: MultiColorPrintApiRequest = {
+          input_task_id: params.input_task_id
         };
+        if (params.max_colors !== undefined) request.max_colors = params.max_colors;
+        if (params.max_depth !== undefined) request.max_depth = params.max_depth;
 
-        let textContent: string;
-        if (params.response_format === ResponseFormat.MARKDOWN) {
-          textContent = `# Multi-Color Processing
+        const response = await client.post<CreateTaskApiResponse>(
+          "/openapi/v1/print/multi-color",
+          request as unknown as Record<string, unknown>
+        );
 
-**Task ID**: ${params.task_id}
-**Requested Colors**: ${params.num_colors}
-**Status**: Guidance only
+        const taskId = response.result;
 
-> Automated multi-color processing is not yet available. See suggestions below.
-
-## Suggestions
-
-${suggestions.map((s, i) => `${i + 1}. ${s}`).join("\n")}
-
-## Current Workaround
-
-1. Use \`meshy_retexture\` to apply distinct color regions to your model
-2. Download as 3MF format using \`meshy_download_model\` with format="3mf"
-3. In your slicer's color painting tool, assign filament colors to regions
-4. Slice and print with your multi-color setup`;
-        } else {
-          textContent = JSON.stringify(output, null, 2);
-        }
-
-        return {
-          content: [{ type: "text", text: textContent }],
-          structuredContent: output
-        };
+        return formatTaskCreatedResponse(
+          {
+            task_id: taskId,
+            status: "PENDING",
+            message: `Multi-color processing started for task "${params.input_task_id}" with ${params.max_colors} colors (depth: ${params.max_depth}). Cost: 10 credits.`,
+            estimated_time: "2-5 minutes"
+          },
+          params.response_format as ResponseFormat,
+          "Multi-Color Processing Task Created",
+          `Processing model from task "${params.input_task_id}" into ${params.max_colors} colors (depth: ${params.max_depth}). The output will be a 3MF file for multi-color 3D printing.`,
+          "multi-color-print"
+        );
       } catch (error) {
         return {
           isError: true,

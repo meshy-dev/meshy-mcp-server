@@ -43,6 +43,71 @@ import {
  * Download a file from URL to local path using streaming.
  * Returns file size in bytes.
  */
+/**
+ * Fix OBJ file for 3D printing: Y-up → Z-up rotation, scale, center, bottom at Z=0.
+ */
+function fixObjForPrinting(filePath: string, targetHeightMm: number = 75): void {
+  const content = fs.readFileSync(filePath, "utf-8");
+  const lines = content.split("\n");
+
+  interface VertexData { tag: "v"; x: number; y: number; z: number; extra: string }
+  interface NormalData { tag: "vn"; x: number; y: number; z: number }
+  interface LineData { tag: "line"; text: string }
+  type Entry = VertexData | NormalData | LineData;
+
+  const entries: Entry[] = [];
+  let minX = Infinity, maxX = -Infinity;
+  let minY = Infinity, maxY = -Infinity;
+  let minZ = Infinity, maxZ = -Infinity;
+
+  for (const line of lines) {
+    if (line.startsWith("v ")) {
+      const parts = line.split(/\s+/);
+      const x = parseFloat(parts[1]);
+      const y = parseFloat(parts[2]);
+      const z = parseFloat(parts[3]);
+      // Y-up to Z-up: (x, y, z) → (x, -z, y)
+      const rx = x, ry = -z, rz = y;
+      minX = Math.min(minX, rx); maxX = Math.max(maxX, rx);
+      minY = Math.min(minY, ry); maxY = Math.max(maxY, ry);
+      minZ = Math.min(minZ, rz); maxZ = Math.max(maxZ, rz);
+      entries.push({ tag: "v", x: rx, y: ry, z: rz, extra: parts.slice(4).join(" ") });
+    } else if (line.startsWith("vn ")) {
+      const parts = line.split(/\s+/);
+      const nx = parseFloat(parts[1]);
+      const ny = parseFloat(parts[2]);
+      const nz = parseFloat(parts[3]);
+      entries.push({ tag: "vn", x: nx, y: -nz, z: ny });
+    } else {
+      entries.push({ tag: "line", text: line });
+    }
+  }
+
+  const height = maxZ - minZ;
+  const scale = height > 1e-6 ? targetHeightMm / height : 1.0;
+  const xOff = -(minX + maxX) / 2 * scale;
+  const yOff = -(minY + maxY) / 2 * scale;
+  const zOff = -(minZ * scale);
+
+  const output: string[] = [];
+  for (const entry of entries) {
+    if (entry.tag === "v") {
+      const tx = entry.x * scale + xOff;
+      const ty = entry.y * scale + yOff;
+      const tz = entry.z * scale + zOff;
+      const extra = entry.extra ? ` ${entry.extra}` : "";
+      output.push(`v ${tx.toFixed(6)} ${ty.toFixed(6)} ${tz.toFixed(6)}${extra}`);
+    } else if (entry.tag === "vn") {
+      output.push(`vn ${entry.x.toFixed(6)} ${entry.y.toFixed(6)} ${entry.z.toFixed(6)}`);
+    } else {
+      output.push(entry.text);
+    }
+  }
+
+  fs.writeFileSync(filePath, output.join("\n"), "utf-8");
+  console.error(`OBJ fixed for printing: Y-up→Z-up, ${targetHeightMm}mm, centered, bottom at Z=0`);
+}
+
 async function downloadFileToLocal(url: string, saveTo: string): Promise<number> {
   // Ensure directory exists
   const dir = path.dirname(saveTo);
@@ -779,23 +844,28 @@ The task has been canceled successfully.`;
       title: "Get Model Download URLs",
       description: `Download a completed 3D model to local disk with automatic file organization.
 
+IMPORTANT: Ask the user which format they need BEFORE downloading. Do NOT download all formats.
+Format recommendations: GLB (viewing), OBJ (white model printing), 3MF (multicolor printing), FBX (game engines), USDZ (AR).
+
 By default, files are auto-saved to meshy_output/ under the current working directory with smart naming and history tracking. Use save_to to override with a custom path.
 
 Args:
   - task_id (string): Task ID of completed model (required)
   - task_type (enum, optional): Task type to route to correct endpoint (default: "text-to-3d"). Auto-infers if wrong.
-  - format (enum): Model format - "glb", "fbx", "usdz", "stl", "obj", or "3mf" (default: "glb")
+  - format (enum): Model format - "glb", "fbx", "usdz", "stl", "obj", or "3mf" (default: "glb"). IMPORTANT: Ask user which format they need before downloading.
   - include_textures (boolean): Include texture files (default: true)
   - save_to (string, optional): Override auto path with a custom ABSOLUTE path. If omitted, auto-saves to meshy_output/{timestamp}_{prompt}_{id}/.
   - parent_task_id (string, optional): Parent task ID for chaining (e.g., preview_task_id for refine). Places output in the same project folder.
+  - print_ready (boolean, optional): If true and format="obj", auto-fix for 3D printing: Y-up→Z-up, scale to height, center, bottom at Z=0.
+  - print_height_mm (number, optional): Target height in mm when print_ready=true. Default 75. Adjust per user request.
 
 Returns:
-  { "local_path": "/path/to/file.glb", "file_size_bytes": 12345678, "project_dir": "..." }
+  { "local_path": "/path/to/file.obj", "file_size_bytes": 12345678, "project_dir": "...", "print_fixed": true }
 
 Examples:
-  - Auto-save: { task_id: "abc-123" }
-  - Custom path: { task_id: "abc-123", save_to: "/Users/me/models/chair.glb" }
-  - Chained refine: { task_id: "def-456", parent_task_id: "abc-123" }
+  - Auto-save: { task_id: "abc-123", format: "glb" }
+  - 3D printing: { task_id: "abc-123", format: "obj", print_ready: true, print_height_mm: 100 }
+  - Chained refine: { task_id: "def-456", parent_task_id: "abc-123", format: "glb" }
 
 Error Handling:
   - Returns error if task is not SUCCEEDED
@@ -985,6 +1055,12 @@ OBJ files can be imported directly into most slicer software:
 
         try {
           const fileSize = await downloadFileToLocal(downloadUrl, savePath);
+
+          // Auto-fix OBJ for 3D printing if requested
+          if (params.print_ready && fmt === "obj") {
+            fixObjForPrinting(savePath, params.print_height_mm || 75);
+          }
+
           const fileSizeMB = (fileSize / (1024 * 1024)).toFixed(2);
           const savedFiles = [path.basename(savePath)];
 

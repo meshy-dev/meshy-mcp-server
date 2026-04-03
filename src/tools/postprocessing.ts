@@ -98,6 +98,7 @@ Error Handling:
         if (params.model_url) request.model_url = params.model_url;
         if (params.topology) request.topology = params.topology;
         if (params.target_polycount) request.target_polycount = params.target_polycount;
+        if (params.auto_size !== undefined) request.auto_size = params.auto_size;
         if (params.origin_at) request.origin_at = params.origin_at;
 
         const response = await client.post<CreateTaskApiResponse>("/openapi/v1/remesh", request as unknown as Record<string, unknown>);
@@ -136,19 +137,23 @@ Error Handling:
       title: "Retexture 3D Model",
       description: `Apply new AI-generated textures to an existing 3D model using Meshy AI.
 
-Use this to change the appearance of a model by applying a new texture style.
+IMPORTANT: Before calling this tool, ask the user to provide EITHER:
+  - text_style_prompt: A text description of the desired texture style (e.g. "rusty metal", "cartoon style")
+  - image_style_url: A reference image URL for the texture style
+One of these is REQUIRED — the tool will fail without it.
+If both are provided, image_style_url takes precedence.
 
 Args:
   - input_task_id (string, optional): Task ID of an existing completed task to retexture
   - model_url (string, optional): Direct URL to a model file to retexture
     (Provide either input_task_id or model_url)
-  - text_style_prompt (string, optional): Text prompt describing the desired texture style. Max 600 characters
-  - image_style_url (string, optional): URL of an image to use as texture style reference
-    (Provide either text_style_prompt or image_style_url)
+  - text_style_prompt (string): Text prompt describing the desired texture style. Max 600 characters. REQUIRED if image_style_url not provided.
+  - image_style_url (string): URL of an image to use as texture style reference. REQUIRED if text_style_prompt not provided. Takes precedence if both given.
   - ai_model (enum): AI model - "meshy-5", "meshy-6", or "latest" (default). Ask user which model before proceeding
   - enable_original_uv (boolean): Preserve original UV mapping (default: true)
   - enable_pbr (boolean): Enable PBR textures (default: false)
   - remove_lighting (boolean, optional): Remove highlights/shadows from base color texture. Default true. Only meshy-6/latest
+  - target_formats (string[], optional): Output formats. 3MF must be explicitly included if needed.
   - response_format (enum): Output format - "markdown" or "json" (default: "markdown")
 
 Returns:
@@ -211,6 +216,7 @@ Error Handling:
         if (params.image_style_url) request.image_style_url = params.image_style_url;
         if (params.ai_model) request.ai_model = params.ai_model;
         if (params.remove_lighting !== undefined) request.remove_lighting = params.remove_lighting;
+        if (params.target_formats) request.target_formats = params.target_formats;
 
         const response = await client.post<CreateTaskApiResponse>("/openapi/v1/retexture", request as unknown as Record<string, unknown>);
         const taskId = response.result;

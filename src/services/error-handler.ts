@@ -132,6 +132,11 @@ function appendContextSuggestions(message: string, error: unknown, context?: Err
     return message + `\n\n**Fix**: For local images, use \`file_path\` parameter (absolute path like "/Users/me/photo.jpg"). The server handles encoding automatically. Do NOT manually base64-encode.`;
   }
 
+  // Multi-color + missing texture
+  if (tool === "meshy_process_multicolor" && (errorText.includes("texture") || errorText.includes("input") || errorText.includes("task"))) {
+    return message + `\n\n**Fix**: The input model must have textures. Run \`meshy_text_to_3d_refine\` or \`meshy_retexture\` first to add textures, then use the resulting task ID as input_task_id.`;
+  }
+
   // Insufficient credits
   if (errorText.includes("insufficient") || errorText.includes("credit")) {
     return message + `\n\n**Fix**: Check your credit balance at https://meshy.ai/pricing. Current tool: ${tool}.`;

@@ -27,12 +27,13 @@ import { registerPostProcessingTools } from "./tools/postprocessing.js";
 import { registerImageTools } from "./tools/image.js";
 import { registerPrintingTools } from "./tools/printing.js";
 import { registerBalanceTool } from "./tools/balance.js";
+import { MESHY_INSTRUCTIONS } from "./instructions.js";
 
 // Create MCP server instance
-const server = new McpServer({
-  name: "meshy-mcp-server",
-  version: "1.0.0"
-});
+const server = new McpServer(
+  { name: "@meshy-ai/meshy-mcp-server", version: "0.2.0" },
+  { instructions: MESHY_INSTRUCTIONS }
+);
 
 /**
  * Initialize server and register tools

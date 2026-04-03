@@ -21,9 +21,11 @@
 - **Text to 3D**: Generate 3D models from text descriptions (preview + refine pipeline)
 - **Image to 3D**: Convert single or multiple images into 3D models
 - **Auto-Rigging & Animation**: Add skeletons and animations to humanoid characters
-- **3D Printing Workflow**: Download models, check printability, send to Bambu Studio
+- **Multi-Color 3D Printing**: Process textured models into multi-color 3MF files for 3D printing
+- **Slicer Integration**: Auto-detect installed slicer software and open models directly
+- **Print-Ready OBJ**: Built-in coordinate transformation (Y-up → Z-up) for 3D printing
 - **Smart File Organization**: Auto-saves to `meshy_output/` with project folders, metadata, and history tracking
-- **Built-in Polling**: `meshy_get_task_status` with `wait=true` auto-polls with exponential backoff
+- **Built-in Workflow Intelligence**: Server instructions guide the agent through correct tool chains for each use case
 
 ## Quick Start
 
@@ -31,6 +33,14 @@
 
 - Node.js >= 18
 - A Meshy API key ([get one here](https://www.meshy.ai/settings/api) — requires Pro plan or above)
+
+### Claude Code
+
+```bash
+claude mcp add meshy -- npx -y @meshy-ai/meshy-mcp-server -e MESHY_API_KEY=msy_YOUR_API_KEY
+```
+
+That's it. The server includes built-in workflow instructions — no additional configuration needed.
 
 ### Cursor
 
@@ -41,33 +51,13 @@ Add to your Cursor MCP settings (`.cursor/mcp.json`):
   "mcpServers": {
     "meshy": {
       "command": "npx",
-      "args": ["-y", "meshy-mcp-server"],
+      "args": ["-y", "@meshy-ai/meshy-mcp-server"],
       "env": {
         "MESHY_API_KEY": "msy_YOUR_API_KEY"
       }
     }
   }
 }
-```
-
-### Claude Code
-
-```bash
-claude mcp add meshy -- npx -y meshy-mcp-server
-```
-
-Then set your API key in your environment:
-
-```bash
-export MESHY_API_KEY="msy_YOUR_API_KEY"
-```
-
-### Smithery
-
-[![smithery badge](https://smithery.ai/badge/meshy-mcp-server)](https://smithery.ai/server/meshy-mcp-server)
-
-```bash
-npx -y @smithery/cli install meshy-mcp-server --client claude
 ```
 
 ## Configuration
@@ -80,30 +70,11 @@ npx -y @smithery/cli install meshy-mcp-server --client claude
 | `PORT` | Port for HTTP transport | `3000` |
 | `CHARACTER_LIMIT` | Max response size in characters | `25000` |
 
-### Test Mode
-
-Use the test API key to try the server without credits:
-
-```
-MESHY_API_KEY=msy_dummy_api_key_for_test_mode_12345678
-```
-
-## Agent Skill
-
-This package includes an agent workflow skill in the `skill/` directory. The skill provides:
-
-- Workflow guidance for multi-step 3D generation pipelines
-- Cost awareness and credit tracking
-- 3D printing workflows with slicer integration
-- API parameter reference
-
-To use the skill in Cursor or Claude Code, copy `skill/SKILL.md` to your project's skills directory.
-
 ## Development
 
 ```bash
 # Clone and install
-git clone https://github.com/Arlieeee/meshy-mcp-server.git
+git clone https://github.com/meshy-dev/meshy-mcp-server.git
 cd meshy-mcp-server
 npm install
 

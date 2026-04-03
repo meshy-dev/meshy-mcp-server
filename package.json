@@ -1,6 +1,6 @@
 {
-  "name": "meshy-mcp-server",
-  "version": "1.0.0",
+  "name": "@meshy-ai/meshy-mcp-server",
+  "version": "0.2.0",
   "description": "MCP server for Meshy AI 3D generation platform",
   "type": "module",
   "main": "dist/index.js",
@@ -10,7 +10,6 @@
   },
   "files": [
     "dist/",
-    "skill/",
     "LICENSE",
     "README.md",
     ".env.example"

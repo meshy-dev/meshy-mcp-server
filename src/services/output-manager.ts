@@ -92,6 +92,7 @@ export function inferStage(taskType: string, apiType?: string): string {
     case "retexture": return "retextured";
     case "rigging": return "rigged";
     case "animation": return "animated";
+    case "multi-color-print": return "multicolor";
     default: return "model";
   }
 }

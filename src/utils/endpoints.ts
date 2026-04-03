@@ -13,7 +13,8 @@ const TASK_ENDPOINTS: Record<TaskType, string> = {
   [TaskType.RIGGING]: "/openapi/v1/rigging",
   [TaskType.ANIMATION]: "/openapi/v1/animations",
   [TaskType.TEXT_TO_IMAGE]: "/openapi/v1/text-to-image",
-  [TaskType.IMAGE_TO_IMAGE]: "/openapi/v1/image-to-image"
+  [TaskType.IMAGE_TO_IMAGE]: "/openapi/v1/image-to-image",
+  [TaskType.MULTI_COLOR_PRINT]: "/openapi/v1/print/multi-color"
 };
 
 /**
