@@ -1,6 +1,6 @@
 {
   "name": "@meshy-ai/meshy-mcp-server",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "MCP server for Meshy AI 3D generation platform",
   "type": "module",
   "main": "dist/index.js",
@@ -30,12 +30,12 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Arlieeee/meshy-mcp-server.git"
+    "url": "git+https://github.com/meshy-dev/meshy-mcp-server.git"
   },
   "author": "Meshy (https://www.meshy.ai)",
-  "homepage": "https://github.com/Arlieeee/meshy-mcp-server#readme",
+  "homepage": "https://github.com/meshy-dev/meshy-mcp-server#readme",
   "bugs": {
-    "url": "https://github.com/Arlieeee/meshy-mcp-server/issues"
+    "url": "https://github.com/meshy-dev/meshy-mcp-server/issues"
   },
   "license": "MIT",
   "dependencies": {

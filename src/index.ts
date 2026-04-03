@@ -31,7 +31,7 @@ import { MESHY_INSTRUCTIONS } from "./instructions.js";
 
 // Create MCP server instance
 const server = new McpServer(
-  { name: "@meshy-ai/meshy-mcp-server", version: "0.2.0" },
+  { name: "@meshy-ai/meshy-mcp-server", version: "0.2.1" },
   { instructions: MESHY_INSTRUCTIONS }
 );
 
