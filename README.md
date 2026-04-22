@@ -27,24 +27,42 @@
 - **Smart File Organization**: Auto-saves to `meshy_output/` with project folders, metadata, and history tracking
 - **Built-in Workflow Intelligence**: Server instructions guide the agent through correct tool chains for each use case
 
-## Quick Start
-
-### Prerequisites
+## Prerequisites
 
 - Node.js >= 18
 - A Meshy API key ([get one here](https://www.meshy.ai/settings/api) — requires Pro plan or above)
 
-### Claude Code
+## Installation
+
+Pick whichever fits your workflow — they all produce the same config.
+
+### Option 1 · One-Command Install · Recommended
+
+[`add-mcp`](https://github.com/neondatabase/add-mcp) auto-detects every AI client on your machine (Cursor, Claude Code, Claude Desktop, Windsurf, Codex, VS Code, Cline, …) and writes the right config to each:
 
 ```bash
-claude mcp add meshy -- npx -y @meshy-ai/meshy-mcp-server -e MESHY_API_KEY=msy_YOUR_API_KEY
+npx add-mcp @meshy-ai/meshy-mcp-server --env MESHY_API_KEY=msy_YOUR_API_KEY
 ```
 
-That's it. The server includes built-in workflow instructions — no additional configuration needed.
+After it finishes, jump to [Activate](#activate-after-install) for your client.
 
-### Cursor
+### Option 2 · Install by Asking Your AI Agent
 
-Add to your Cursor MCP settings (`.cursor/mcp.json`):
+Already chatting with Cursor / Claude Code / Codex? Paste this prompt:
+
+```
+Install the Meshy MCP server for me. Docs: https://github.com/meshy-dev/meshy-mcp-server
+Use this env var: MESHY_API_KEY=msy_YOUR_API_KEY
+```
+
+The agent will run `add-mcp` (or write `mcp.json` directly) and tell you when it's ready. You'll still need the **Activate** step for your client.
+
+### Option 3 · Manual Install
+
+<details>
+<summary><b>Cursor</b></summary>
+
+Paste into `.cursor/mcp.json` (project) or `~/.cursor/mcp.json` (global):
 
 ```json
 {
@@ -52,13 +70,52 @@ Add to your Cursor MCP settings (`.cursor/mcp.json`):
     "meshy": {
       "command": "npx",
       "args": ["-y", "@meshy-ai/meshy-mcp-server"],
-      "env": {
-        "MESHY_API_KEY": "msy_YOUR_API_KEY"
-      }
+      "env": { "MESHY_API_KEY": "msy_YOUR_API_KEY" }
     }
   }
 }
 ```
+
+> **Windows**: replace `"command": "npx"` with `"command": "cmd"` and `"args": ["/c", "npx", "-y", "@meshy-ai/meshy-mcp-server"]`.
+
+</details>
+
+<details>
+<summary><b>Claude Code</b></summary>
+
+```bash
+claude mcp add-json meshy '{"command":"npx","args":["-y","@meshy-ai/meshy-mcp-server"],"env":{"MESHY_API_KEY":"msy_YOUR_API_KEY"}}'
+```
+
+</details>
+
+<details>
+<summary><b>Other clients</b> (Windsurf, Claude Desktop, Codex, VS Code, Cline…)</summary>
+
+Use **Option 1** — `add-mcp` writes the correct config for each.
+
+</details>
+
+## Activate After Install
+
+Most clients auto-load the new server, but **Cursor and VS Code require a manual toggle**:
+
+| Client | What to do | Verify |
+|---|---|---|
+| **Cursor** | Restart → `Settings` → `MCP & Integrations` → toggle `meshy` **on** → wait for green dot ● → open a **new chat** | `List the meshy tools available` |
+| **Claude Code** | Nothing — auto-loads on next message | `/mcp` shows `meshy ✓ connected` |
+| **Claude Desktop** | Quit & relaunch the app | `List the meshy tools available` |
+| **Windsurf** | Refresh in the Cascade panel's MCP section | `List the meshy tools available` |
+| **VS Code** | Run command `MCP: List Servers` → click `meshy` → **Start** | `List the meshy tools available` |
+| **Codex** | Nothing — auto-loads on next session | `List the meshy tools available` |
+
+## Troubleshooting
+
+- **`MESHY_API_KEY environment variable is required`** — the key didn't reach the server. Make sure it sits inside an `"env": {...}` block in your `mcp.json`, not in `args`.
+- **`spawn npx ENOENT`** (Windows) — wrap with `cmd /c` (see Cursor block above).
+- **`error: unknown option '-y'`** (Claude Code on Windows) — use `claude mcp add-json` instead of `claude mcp add … -- npx -y …`.
+- **Cursor doesn't list `meshy`** — make sure `mcp.json` is valid JSON (no trailing commas), then fully restart Cursor.
+- **Tool calls return 401** — the API key is invalid or revoked. Regenerate at https://www.meshy.ai/settings/api.
 
 ## Configuration
 
