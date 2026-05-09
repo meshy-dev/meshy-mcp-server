@@ -100,4 +100,3 @@
 - Chained task support with parent_task_id for project folder grouping
 - Dual transport: stdio (default) and HTTP
 - Agent workflow skill included in `skill/` directory
-- Smithery MCP Registry support
