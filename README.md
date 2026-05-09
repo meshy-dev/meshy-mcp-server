@@ -4,7 +4,7 @@
 
 ## Features
 
-19 tools covering the full Meshy API:
+20 tools covering the full Meshy API:
 
 | Category | Tools |
 |----------|-------|
@@ -13,7 +13,7 @@
 | **Image Generation** | `meshy_text_to_image`, `meshy_image_to_image` |
 | **Task Management** | `meshy_get_task_status`, `meshy_list_tasks`, `meshy_cancel_task`, `meshy_download_model` |
 | **Workspace** | `meshy_list_models` |
-| **3D Printing** | `meshy_send_to_slicer`, `meshy_analyze_printability`, `meshy_process_multicolor` |
+| **3D Printing** | `meshy_send_to_slicer`, `meshy_analyze_printability`, `meshy_repair_printability`, `meshy_process_multicolor` |
 | **Account** | `meshy_check_balance` |
 
 ### Key Capabilities
@@ -21,9 +21,11 @@
 - **Text to 3D**: Generate 3D models from text descriptions (preview + refine pipeline)
 - **Image to 3D**: Convert single or multiple images into 3D models
 - **Auto-Rigging & Animation**: Add skeletons and animations to humanoid characters
-- **Multi-Color 3D Printing**: Process textured models into multi-color 3MF files for 3D printing
-- **Slicer Integration**: Auto-detect installed slicer software and open models directly
-- **Print-Ready OBJ**: Built-in coordinate transformation (Y-up → Z-up) for 3D printing
+- **3D Printability Suite (v0.3.0)**:
+  - `analyze_printability` — free FDM check (watertight, volume, holes, non-manifold edges, degenerate faces)
+  - `repair_printability` — 10-credit topology repair (output format mirrors input)
+  - `process_multicolor` — 10-credit multi-color 3MF for AMS/MMU printers
+- **Slicer Integration**: Auto-detect 7 installed slicers (OrcaSlicer, Bambu, Creality, Elegoo, Anycubic, PrusaSlicer, Cura) and return launch commands the agent can execute
 - **Smart File Organization**: Auto-saves to `meshy_output/` with project folders, metadata, and history tracking
 - **Built-in Workflow Intelligence**: Server instructions guide the agent through correct tool chains for each use case
 

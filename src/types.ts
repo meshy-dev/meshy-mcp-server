@@ -153,11 +153,44 @@ export interface AnimateApiRequest {
   };
 }
 
-// Multi-Color Print API request body
+// Multi-Color Print API request body (POST /openapi/v1/print/multi-color)
+// Provide exactly one of input_task_id / model_url.
 export interface MultiColorPrintApiRequest {
-  input_task_id: string;
+  input_task_id?: string;
+  model_url?: string;
   max_colors?: number;
   max_depth?: number;
+}
+
+// Analyze Printability API request body (POST /openapi/v1/print/analyze)
+// Provide exactly one of input_task_id / model_url.
+export interface AnalyzePrintabilityApiRequest {
+  input_task_id?: string;
+  model_url?: string;
+}
+
+// Repair Printability API request body (POST /openapi/v1/print/repair)
+// Provide exactly one of input_task_id / model_url.
+export interface RepairPrintabilityApiRequest {
+  input_task_id?: string;
+  model_url?: string;
+}
+
+// Printability evaluation result (returned by GET /openapi/v1/print/analyze/:id once SUCCEEDED)
+export interface PrintabilityResult {
+  _version: string;
+  status: "healthy" | "warning" | "error" | "unknown";
+  issue_count: number;
+  error_count: number;
+  warning_count: number;
+  metrics: {
+    is_watertight: boolean;
+    volume: number;
+    non_manifold_edges: number;
+    degenerate_faces: number;
+    holes: number;
+  };
+  evaluated_at: number;
 }
 
 // Text-to-Image API request body
@@ -201,6 +234,9 @@ export interface Task {
     stl?: string;
     "3mf"?: string;
   };
+
+  // Populated only on print-analyze tasks once SUCCEEDED
+  printability?: PrintabilityResult;
   thumbnail_url?: string;
   texture_urls?: TextureUrlsObject[] | TextureUrlsObject;
   video_url?: string;

@@ -63,12 +63,12 @@ async function initializeServer() {
     console.error("  ✓ Image tools registered (text-to-image, image-to-image)");
 
     registerPrintingTools(server, meshyClient);
-    console.error("  ✓ Printing tools registered (send-to-slicer, analyze-printability, process-multicolor)");
+    console.error("  ✓ Printing tools registered (send-to-slicer, analyze-printability, repair-printability, process-multicolor)");
 
     registerBalanceTool(server, meshyClient);
     console.error("  ✓ Balance tool registered (check-balance)");
 
-    console.error("✓ Server initialized successfully with 19 tools");
+    console.error("✓ Server initialized successfully with 20 tools");
     return meshyClient;
   } catch (error) {
     console.error("Failed to initialize server:", error);
@@ -100,11 +100,14 @@ async function runHTTP() {
   await initializeServer();
 
   const app = express();
-  app.use(express.json());
+  // Allow large request bodies so callers can pass `model_url` as a `data:` URI
+  // for the print/analyze, print/repair, and print/multi-color tools. Meshy's
+  // own model_url upload limit is 100 MB; we mirror that here.
+  app.use(express.json({ limit: "100mb" }));
 
   // Health check endpoint
   app.get("/health", (req, res) => {
-    res.json({ status: "ok", server: "meshy-mcp-server", version: "1.0.0" });
+    res.json({ status: "ok", server: "meshy-mcp-server", version: "0.3.0" });
   });
 
   // MCP endpoint

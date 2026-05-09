@@ -281,10 +281,42 @@ function buildWaitSuccessResponse(
     lines.push("");
   }
 
+  // Printability results (print-analyze tasks)
+  if (taskType === TaskType.PRINT_ANALYZE && task.printability) {
+    const p = task.printability;
+    const m = p.metrics;
+    const statusIcon =
+      p.status === "healthy" ? "✓" :
+      p.status === "warning" ? "⚠" :
+      p.status === "error" ? "✗" : "?";
+    lines.push(`## Printability Analysis`);
+    lines.push(`**Overall**: ${statusIcon} ${p.status.toUpperCase()} — ${p.issue_count} issue(s) (${p.error_count} error, ${p.warning_count} warning)`);
+    lines.push("");
+    lines.push(`| Metric | Value |`);
+    lines.push(`|--------|-------|`);
+    lines.push(`| watertight | ${m.is_watertight} |`);
+    lines.push(`| volume (m³) | ${m.volume.toFixed(6)} |`);
+    lines.push(`| non-manifold edges | ${m.non_manifold_edges} |`);
+    lines.push(`| degenerate faces | ${m.degenerate_faces} |`);
+    lines.push(`| holes | ${m.holes} |`);
+    lines.push("");
+    if (p.status === "error") {
+      lines.push(`**Recommendation**: \`meshy_repair_printability\` (10 credits) before printing — errors block reliable FDM output.`);
+    } else if (p.status === "warning") {
+      lines.push(`**Recommendation**: repair is optional; warnings (degenerate faces / holes) won't block printing but may affect surface quality.`);
+    } else if (p.status === "healthy") {
+      lines.push(`**Recommendation**: model is print-ready — proceed to slicer.`);
+    }
+    lines.push("");
+  }
+
   // Next steps
-  lines.push("**Next Steps**: Use `meshy_download_model` with task_id \"" + taskId + "\"" +
-    (taskType !== TaskType.TEXT_TO_3D ? ` and task_type "${taskType}"` : "") +
-    " to get download URLs.");
+  // print-analyze produces metrics, not downloadable assets — skip the "use meshy_download_model" hint.
+  if (taskType !== TaskType.PRINT_ANALYZE) {
+    lines.push("**Next Steps**: Use `meshy_download_model` with task_id \"" + taskId + "\"" +
+      (taskType !== TaskType.TEXT_TO_3D ? ` and task_type "${taskType}"` : "") +
+      " to get download URLs.");
+  }
 
   const modelUrls: Record<string, string> = {};
   if (task.model_urls) {
@@ -304,7 +336,8 @@ function buildWaitSuccessResponse(
       poll_count: pollCount,
       model_urls: Object.keys(modelUrls).length > 0 ? modelUrls : undefined,
       vertex_count: task.vertex_count,
-      face_count: task.face_count
+      face_count: task.face_count,
+      printability: task.printability
     }
   };
 }

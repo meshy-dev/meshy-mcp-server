@@ -14,7 +14,9 @@ const TASK_ENDPOINTS: Record<TaskType, string> = {
   [TaskType.ANIMATION]: "/openapi/v1/animations",
   [TaskType.TEXT_TO_IMAGE]: "/openapi/v1/text-to-image",
   [TaskType.IMAGE_TO_IMAGE]: "/openapi/v1/image-to-image",
-  [TaskType.MULTI_COLOR_PRINT]: "/openapi/v1/print/multi-color"
+  [TaskType.MULTI_COLOR_PRINT]: "/openapi/v1/print/multi-color",
+  [TaskType.PRINT_ANALYZE]: "/openapi/v1/print/analyze",
+  [TaskType.PRINT_REPAIR]: "/openapi/v1/print/repair"
 };
 
 /**
@@ -32,7 +34,10 @@ export const LIST_CAPABLE_TASK_TYPES: TaskType[] = [
   TaskType.REMESH,
   TaskType.RETEXTURE,
   TaskType.TEXT_TO_IMAGE,
-  TaskType.IMAGE_TO_IMAGE
+  TaskType.IMAGE_TO_IMAGE,
+  TaskType.MULTI_COLOR_PRINT,
+  TaskType.PRINT_ANALYZE,
+  TaskType.PRINT_REPAIR
 ];
 
 /**

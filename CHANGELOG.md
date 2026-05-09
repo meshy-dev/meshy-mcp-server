@@ -1,5 +1,48 @@
 # Changelog
 
+## [0.3.0] - 2026-05-08
+
+### Added
+
+- **`meshy_repair_printability`** — new tool calling `POST /openapi/v1/print/repair`
+  - Repairs non-manifold edges, degenerate faces, holes, and ensures watertightness
+  - Cost: 10 credits per call
+  - Provide exactly one of `input_task_id` or `model_url` (.glb / .stl / .obj, max 100 MB)
+  - Output format mirrors input format: `input_task_id` → GLB; `model_url` with .stl → STL; etc.
+  - Note: textures are NOT preserved (geometry-only repair)
+  - Task type `"print-repair"` for polling via `meshy_get_task_status`
+  - Response stream available via SSE
+- `PRINT_REPAIR` task type with endpoint mapping
+- `RepairPrintabilityInputSchema` (input_task_id / model_url, mutually exclusive)
+- `AnalyzePrintabilityApiRequest`, `RepairPrintabilityApiRequest`, `PrintabilityResult` interfaces in `types.ts`
+- Helper `validateExactlyOneSource()` in `schemas/printing.ts` for runtime input_task_id/model_url checks
+- `PRINT_REPAIR_CREDITS` and `PRINT_ANALYZE_CREDITS` constants
+
+### Changed
+
+- **`meshy_analyze_printability`**: replaced placeholder with real Meshy printability API integration
+  - Calls `POST /openapi/v1/print/analyze`
+  - **FREE** (0 credits) per call
+  - Provide exactly one of `input_task_id` or `model_url` (input_task_id requires Meshy 6 or any Preview model)
+  - Returns task_id for polling via `meshy_get_task_status` (task_type: `"print-analyze"`)
+  - Once SUCCEEDED, the task object's `printability` field reports `status` (healthy/warning/error/unknown), `issue_count`, and `metrics` (is_watertight, volume, non_manifold_edges, degenerate_faces, holes)
+  - Removed legacy `task_id` + `task_type` parameters; replaced with `input_task_id` / `model_url` mutually-exclusive pair
+- **`meshy_process_multicolor`**: now accepts `model_url` in addition to `input_task_id`
+  - Both are mutually exclusive (provide exactly one)
+  - Public docs confirm `.glb` and `.fbx` supported via `model_url`
+- **`PRINT_ANALYZE`** added to `TaskType` enum and routed through `endpoints.ts`
+- **`LIST_CAPABLE_TASK_TYPES`** now includes `MULTI_COLOR_PRINT`, `PRINT_ANALYZE`, `PRINT_REPAIR` — all three new printability endpoints support list/delete/stream
+- **Server tool count**: 19 → 20
+
+### Updated
+
+- `error-handler.ts`: 402/InsufficientCredits message now mentions running free `analyze` before paying for `repair` / `multicolor`; new tip for `analyze` 404s about the Meshy 6 / Preview model requirement
+- `Task.printability?` field added so polling tools can surface analyze results without casts
+- `meshy_get_task_status`: when polling a `print-analyze` task, the SUCCEEDED summary now renders the full `printability` block (status icon, error/warning counts, geometry metrics table, repair recommendation) and `structuredContent.printability` carries the raw block. Previously the analysis result was discarded by the formatter even though the API returned it
+- HTTP transport (`TRANSPORT=http`): `express.json` body limit raised from the 100 KB default to 100 MB so callers can pass `data:` URIs to `model_url` for `print/analyze` / `print/repair` / `print/multi-color` (the Meshy API itself permits up to 100 MB). The `print/repair` via `data:` URI backend bug surfaced during 0.3.0 e2e testing (BAC-1180) was fixed upstream on 2026-05-09 and re-verified end-to-end; the temporary remesh-staging workaround that briefly shipped in the error handler has been removed
+- `/health` endpoint reports the real package version
+- Bumped version to 0.3.0
+
 ## [0.2.0] - 2026-04-02
 
 ### Changed

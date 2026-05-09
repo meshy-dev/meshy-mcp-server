@@ -137,9 +137,17 @@ function appendContextSuggestions(message: string, error: unknown, context?: Err
     return message + `\n\n**Fix**: The input model must have textures. Run \`meshy_text_to_3d_refine\` or \`meshy_retexture\` first to add textures, then use the resulting task ID as input_task_id.`;
   }
 
-  // Insufficient credits
+  // Insufficient credits — extra hint for the 10-credit print operations
   if (errorText.includes("insufficient") || errorText.includes("credit")) {
-    return message + `\n\n**Fix**: Check your credit balance at https://meshy.ai/pricing. Current tool: ${tool}.`;
+    const printToolHint = (tool === "meshy_repair_printability" || tool === "meshy_process_multicolor")
+      ? ` This tool costs 10 credits per call; consider running \`meshy_analyze_printability\` (free) first to confirm the model needs repair before spending credits.`
+      : "";
+    return message + `\n\n**Fix**: Use \`meshy_check_balance\` to verify credits, or upgrade at https://meshy.ai/pricing. Current tool: ${tool}.${printToolHint}`;
+  }
+
+  // Analyze-printability + Meshy 6 / Preview model requirement
+  if (tool === "meshy_analyze_printability" && (errorText.includes("404") || errorText.includes("not found") || errorText.includes("model older"))) {
+    return message + `\n\n**Fix**: \`meshy_analyze_printability\` requires the upstream task to use Meshy 6 or any Preview model. Tasks generated with Meshy 4/5 are not supported — re-generate with \`ai_model: "meshy-6"\` or pass a \`model_url\` directly instead.`;
   }
 
   return message;

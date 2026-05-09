@@ -71,6 +71,11 @@ export enum PoseMode {
 }
 
 // Task Types
+//
+// Note on multi-color naming: the input string we accept ("multi-color-print")
+// is the convention used by this server's tools. The Meshy API itself returns
+// `type: "print-multi-color"` on the GET response. Auto-inference matches by
+// endpoint URL, not by the response `type` field, so the asymmetry is harmless.
 export enum TaskType {
   TEXT_TO_3D = "text-to-3d",
   IMAGE_TO_3D = "image-to-3d",
@@ -81,7 +86,9 @@ export enum TaskType {
   ANIMATION = "animation",
   TEXT_TO_IMAGE = "text-to-image",
   IMAGE_TO_IMAGE = "image-to-image",
-  MULTI_COLOR_PRINT = "multi-color-print"
+  MULTI_COLOR_PRINT = "multi-color-print",
+  PRINT_ANALYZE = "print-analyze",
+  PRINT_REPAIR = "print-repair"
 }
 
 // Remesh Output Formats
@@ -138,6 +145,8 @@ export const MULTICOLOR_CAPABLE_SLICERS: SlicerType[] = [
 
 // Multi-color processing credit cost
 export const MULTI_COLOR_CREDITS = 10;
+export const PRINT_REPAIR_CREDITS = 10;
+export const PRINT_ANALYZE_CREDITS = 0;
 
 // Animation Post Process Operations
 export enum AnimationPostProcessOp {

@@ -1,5 +1,13 @@
 /**
- * 3D printing tools (send to slicer, analyze printability, process multicolor)
+ * 3D printing tools — slicer detection, printability analysis, model repair, multicolor processing.
+ *
+ * Wires up real Meshy print API endpoints:
+ *   - POST /openapi/v1/print/analyze   — free FDM printability check
+ *   - POST /openapi/v1/print/repair    — 10 credits, fixes topology issues
+ *   - POST /openapi/v1/print/multi-color — 10 credits, outputs multicolor 3MF
+ *
+ * Slicer detection scans the local filesystem for 7 supported slicers and
+ * returns launch commands; the agent (not this server) executes them.
  */
 
 import { z } from "zod";
@@ -9,10 +17,17 @@ import { handleMeshyError } from "../services/error-handler.js";
 import {
   SendToSlicerInputSchema,
   AnalyzePrintabilityInputSchema,
-  ProcessMulticolorInputSchema
+  RepairPrintabilityInputSchema,
+  ProcessMulticolorInputSchema,
+  validateExactlyOneSource
 } from "../schemas/printing.js";
-import { ResponseFormat, SlicerType, MULTICOLOR_CAPABLE_SLICERS } from "../constants.js";
-import { CreateTaskApiResponse, MultiColorPrintApiRequest } from "../types.js";
+import { ResponseFormat, SlicerType } from "../constants.js";
+import {
+  CreateTaskApiResponse,
+  AnalyzePrintabilityApiRequest,
+  RepairPrintabilityApiRequest,
+  MultiColorPrintApiRequest
+} from "../types.js";
 import { formatTaskCreatedResponse } from "../utils/response-formatter.js";
 import {
   detectInstalledSlicers,
@@ -33,9 +48,7 @@ function buildBambuStudioUrl(modelUrl: string, fileName: string): string {
   return `bambustudio://open?file=${encodeURIComponent(urlWithFragment)}`;
 }
 
-/**
- * Format detected slicers into a markdown table.
- */
+/** Format detected slicers into a markdown table. */
 function formatSlicerTable(slicers: DetectedSlicer[]): string {
   if (slicers.length === 0) return "No slicers detected.";
   const rows = slicers.map(s =>
@@ -65,9 +78,8 @@ Multicolor-capable: OrcaSlicer, Bambu Studio, Creality Print, Elegoo Slicer, Any
 Usage pattern:
 1. Call this tool at the START of a print workflow to detect slicers
 2. Present detected slicers to the user
-3. Generate and download the model
-4. At the END, ask user which slicer to use from the detected list
-5. Take the launch_command, replace {file} with the local file path, execute via Bash
+3. Generate, analyze, optionally repair / multicolor-process, and download the model
+4. At the END, take the launch_command, replace {file} with the local file path, execute via Bash
 
 Args:
   - model_url (string): Download URL of the model file (can be a placeholder at detection time)
@@ -94,7 +106,6 @@ The launch_command contains {file} as placeholder. Replace it with the actual lo
     },
     async (params: z.infer<typeof SendToSlicerInputSchema>) => {
       try {
-        // Step 1: Detect slicers
         let detected: DetectedSlicer[] = [];
         if (params.slicer_type === "auto") {
           detected = detectInstalledSlicers();
@@ -103,17 +114,14 @@ The launch_command contains {file} as placeholder. Replace it with the actual lo
           if (specific) detected = [specific];
         }
 
-        // Step 2: Filter for multicolor if requested
         if (params.is_multicolor) {
           detected = detected.filter(s => s.supportsMulticolor);
         }
 
-        // Step 3: Pick recommended slicer
         const recommended = params.is_multicolor
           ? getBestMulticolorSlicer(detected)
           : (detected[0] || null);
 
-        // Step 4: Build launch command with actual file name
         const slicerList = detected.map(s => ({
           name: s.displayName,
           type: s.type,
@@ -130,7 +138,6 @@ The launch_command contains {file} as placeholder. Replace it with the actual lo
           supports_multicolor: recommended.supportsMulticolor
         } : null;
 
-        // Bambu URL scheme as bonus
         const bambuSlicer = detected.find(s => s.type === SlicerType.BAMBU);
         const bambuUrlScheme = bambuSlicer
           ? buildBambuStudioUrl(params.model_url, params.file_name)
@@ -195,106 +202,177 @@ ${launchCmd}
       } catch (error) {
         return {
           isError: true,
-          content: [{
-            type: "text",
-            text: handleMeshyError(error)
-          }]
+          content: [{ type: "text", text: handleMeshyError(error) }]
         };
       }
     }
   );
 
-  // ── Analyze Printability (placeholder) ──────────────────────────
+  // ── Analyze Printability ────────────────────────────────────────
   server.registerTool(
     "meshy_analyze_printability",
     {
-      title: "Analyze Model Printability",
-      description: `[PLACEHOLDER] Analyze a 3D model's suitability for 3D printing.
+      title: "Analyze Model Printability (FDM)",
+      description: `Run automated FDM printability analysis on a 3D model. Cost: FREE (0 credits).
 
-Currently returns a manual checklist for print readiness. Will be replaced with automated analysis when the Meshy printability API becomes available.
+Reports watertightness, volume, holes, non-manifold edges, and degenerate faces. Use this BEFORE 3D printing to decide whether the mesh needs repair (\`meshy_repair_printability\`).
+
+Provide EXACTLY ONE of:
+  - input_task_id: a SUCCEEDED Meshy task. **Must use Meshy 6 or any Preview model**. Supported task types: text-to-3d, image-to-3d, multi-image-to-3d, remesh, retexture.
+  - model_url: a public URL of a 3D model file (.glb / .gltf / .obj / .fbx / .stl, max 100 MB).
 
 Args:
-  - task_id (string): Task ID of the completed model to analyze (required)
-  - task_type (string): Task type (default: "text-to-3d")
-  - response_format (enum): Output format - "markdown" or "json" (default: "markdown")
+  - input_task_id (string, optional): Upstream Meshy task ID
+  - model_url (string, optional): Public model URL
+  - response_format (enum): "markdown" or "json" (default: "markdown")
 
 Returns:
-  {
-    "status": "manual_check_required",
-    "checklist": [ ... ],
-    "recommendations": [ ... ]
-  }
+  { "task_id": "...", "status": "PENDING", ... }
+
+Next Steps:
+  Use meshy_get_task_status with task_id and task_type="print-analyze" to wait for completion.
+  Once SUCCEEDED, the task object's \`printability\` field contains:
+    - status: "healthy" / "warning" / "error" / "unknown"
+    - issue_count, error_count, warning_count
+    - metrics: { is_watertight, volume, non_manifold_edges, degenerate_faces, holes }
+  - status="error" → call meshy_repair_printability before printing.
+  - status="warning" → repair is optional but recommended for FDM.
 
 Examples:
-  - Analyze model: { task_id: "abc-123", task_type: "text-to-3d" }`,
+  - From a task: { input_task_id: "abc-123" }
+  - From a URL:  { model_url: "https://example.com/model.glb" }`,
       inputSchema: AnalyzePrintabilityInputSchema,
       annotations: {
-        readOnlyHint: true,
+        readOnlyHint: false,
         destructiveHint: false,
-        idempotentHint: true,
+        idempotentHint: false,
         openWorldHint: true
       }
     },
     async (params: z.infer<typeof AnalyzePrintabilityInputSchema>) => {
-      try {
-        const checklist = [
-          { item: "Wall thickness", recommendation: "Minimum 1.2mm for FDM, 0.8mm for resin", status: "check_manually" },
-          { item: "Overhangs", recommendation: "Keep below 45° or add supports", status: "check_manually" },
-          { item: "Manifold mesh", recommendation: "Ensure mesh is watertight with no holes", status: "check_manually" },
-          { item: "Minimum detail size", recommendation: "At least 0.4mm for FDM nozzle, 0.05mm for resin", status: "check_manually" },
-          { item: "Base stability", recommendation: "Flat base or add a brim/raft in slicer", status: "check_manually" },
-          { item: "Floating parts", recommendation: "All parts should be connected or printed separately", status: "check_manually" }
-        ];
-
-        const recommendations = [
-          "Import the model file into your slicer to check for mesh errors",
-          "Use the slicer's built-in repair tool if issues are detected",
-          "Consider adding supports for overhanging features",
-          "Scale the model appropriately for your printer's build volume",
-          "For figurines/miniatures, consider hollowing the model to save material"
-        ];
-
-        const output = {
-          task_id: params.task_id,
-          status: "manual_check_required",
-          message: "Automated printability analysis is not yet available. Please review the checklist below.",
-          checklist,
-          recommendations
-        };
-
-        let textContent: string;
-        if (params.response_format === ResponseFormat.MARKDOWN) {
-          textContent = `# Printability Analysis
-
-**Task ID**: ${params.task_id}
-**Status**: Manual check required
-
-> Automated printability analysis is not yet available. Please review the checklist below.
-
-## Checklist
-
-| Check | Recommendation | Status |
-|-------|---------------|--------|
-${checklist.map(c => `| ${c.item} | ${c.recommendation} | Check manually |`).join("\n")}
-
-## Recommendations
-
-${recommendations.map((r, i) => `${i + 1}. ${r}`).join("\n")}`;
-        } else {
-          textContent = JSON.stringify(output, null, 2);
-        }
-
+      const validationError = validateExactlyOneSource(params);
+      if (validationError) {
         return {
-          content: [{ type: "text", text: textContent }],
-          structuredContent: output
+          isError: true,
+          content: [{ type: "text", text: validationError }]
         };
+      }
+      try {
+        const request: AnalyzePrintabilityApiRequest = {};
+        if (params.input_task_id) request.input_task_id = params.input_task_id;
+        if (params.model_url) request.model_url = params.model_url;
+
+        const response = await client.post<CreateTaskApiResponse>(
+          "/openapi/v1/print/analyze",
+          request as unknown as Record<string, unknown>
+        );
+
+        const taskId = response.result;
+        const sourceDesc = params.input_task_id
+          ? `task "${params.input_task_id}"`
+          : `model URL`;
+
+        return formatTaskCreatedResponse(
+          {
+            task_id: taskId,
+            status: "PENDING",
+            message: `Printability analysis started for ${sourceDesc}. Cost: FREE.`,
+            estimated_time: "10-30 seconds"
+          },
+          params.response_format as ResponseFormat,
+          "Printability Analysis Task Created",
+          `Analyzing ${sourceDesc} for FDM printability. The result will report watertightness, volume, non-manifold edges, degenerate faces, and holes.`,
+          "print-analyze"
+        );
       } catch (error) {
         return {
           isError: true,
-          content: [{
-            type: "text",
-            text: handleMeshyError(error)
-          }]
+          content: [{ type: "text", text: handleMeshyError(error) }]
+        };
+      }
+    }
+  );
+
+  // ── Repair Printability ─────────────────────────────────────────
+  server.registerTool(
+    "meshy_repair_printability",
+    {
+      title: "Repair Model Topology for 3D Printing",
+      description: `Repair a 3D model's topology issues for FDM printing — fixes non-manifold edges, degenerate faces, holes, and ensures watertightness. Cost: 10 credits.
+
+Output format mirrors the input format:
+  - input_task_id → output is GLB
+  - model_url with .stl → output is STL
+  - model_url with .obj → output is OBJ
+  - model_url with .glb → output is GLB
+
+Provide EXACTLY ONE of:
+  - input_task_id: a SUCCEEDED Meshy task that produced a GLB asset.
+  - model_url: a public URL of a 3D model (.glb / .stl / .obj, max 100 MB).
+
+Args:
+  - input_task_id (string, optional): Upstream Meshy task ID
+  - model_url (string, optional): Public model URL
+  - response_format (enum): "markdown" or "json" (default: "markdown")
+
+Returns:
+  { "task_id": "...", "status": "PENDING", ... }
+
+Next Steps:
+  Use meshy_get_task_status with task_id and task_type="print-repair" to wait for completion.
+  Once SUCCEEDED, model_urls contains the repaired model in the same format as the input.
+  Note: textures are NOT preserved — repair operates on geometry only.
+
+Examples:
+  - From a task: { input_task_id: "abc-123" }
+  - From an STL: { model_url: "https://example.com/model.stl" }`,
+      inputSchema: RepairPrintabilityInputSchema,
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: true
+      }
+    },
+    async (params: z.infer<typeof RepairPrintabilityInputSchema>) => {
+      const validationError = validateExactlyOneSource(params);
+      if (validationError) {
+        return {
+          isError: true,
+          content: [{ type: "text", text: validationError }]
+        };
+      }
+      try {
+        const request: RepairPrintabilityApiRequest = {};
+        if (params.input_task_id) request.input_task_id = params.input_task_id;
+        if (params.model_url) request.model_url = params.model_url;
+
+        const response = await client.post<CreateTaskApiResponse>(
+          "/openapi/v1/print/repair",
+          request as unknown as Record<string, unknown>
+        );
+
+        const taskId = response.result;
+        const sourceDesc = params.input_task_id
+          ? `task "${params.input_task_id}"`
+          : `model URL`;
+
+        return formatTaskCreatedResponse(
+          {
+            task_id: taskId,
+            status: "PENDING",
+            message: `Topology repair started for ${sourceDesc}. Cost: 10 credits.`,
+            estimated_time: "30-60 seconds"
+          },
+          params.response_format as ResponseFormat,
+          "Printability Repair Task Created",
+          `Repairing ${sourceDesc}'s topology (non-manifold edges, holes, degenerate faces). Output preserves the input format; textures are not preserved.`,
+          "print-repair"
+        );
+      } catch (error) {
+        return {
+          isError: true,
+          content: [{ type: "text", text: handleMeshyError(error) }]
         };
       }
     }
@@ -314,11 +392,14 @@ PREREQUISITES:
   - A multicolor-capable slicer should be installed on the user's system.
 
 IMPORTANT: Before calling, ask the user to confirm:
-  - max_colors: depends on their printer's multi-color capability (e.g. Bambu AMS supports 4-16 colors). Ask how many colors they want.
-  - max_depth: affects color boundary precision and file size. Higher = finer but larger. Ask user's preference or suggest default 4.
+  - max_colors: depends on their printer's multi-color capability (e.g. Bambu AMS supports 4-16 colors).
+  - max_depth: affects color boundary precision and file size. Higher = finer but larger.
+
+Provide EXACTLY ONE of input_task_id / model_url.
 
 Args:
-  - input_task_id (string): Task ID of a completed TEXTURED model (required)
+  - input_task_id (string, optional): Task ID of a completed TEXTURED model. Mutually exclusive with model_url.
+  - model_url (string, optional): Public URL of a textured .glb or .fbx model. Mutually exclusive with input_task_id.
   - max_colors (number): Max colors for segmentation (1-16, default: 4). MUST confirm with user based on their printer capability.
   - max_depth (number): Segmentation depth (3-6, default: 4). Higher = finer separation, larger file. MUST confirm with user.
   - response_format (enum): "markdown" or "json" (default: "markdown")
@@ -334,7 +415,8 @@ Next Steps:
 
 Examples:
   - Default: { input_task_id: "abc-123" }
-  - Custom: { input_task_id: "abc-123", max_colors: 8, max_depth: 5 }`,
+  - Custom: { input_task_id: "abc-123", max_colors: 8, max_depth: 5 }
+  - From URL: { model_url: "https://example.com/textured.glb", max_colors: 6 }`,
       inputSchema: ProcessMulticolorInputSchema,
       annotations: {
         readOnlyHint: false,
@@ -344,12 +426,20 @@ Examples:
       }
     },
     async (params: z.infer<typeof ProcessMulticolorInputSchema>) => {
+      const validationError = validateExactlyOneSource(params);
+      if (validationError) {
+        return {
+          isError: true,
+          content: [{ type: "text", text: validationError }]
+        };
+      }
       try {
         const request: MultiColorPrintApiRequest = {
-          input_task_id: params.input_task_id
+          max_colors: params.max_colors,
+          max_depth: params.max_depth
         };
-        if (params.max_colors !== undefined) request.max_colors = params.max_colors;
-        if (params.max_depth !== undefined) request.max_depth = params.max_depth;
+        if (params.input_task_id) request.input_task_id = params.input_task_id;
+        if (params.model_url) request.model_url = params.model_url;
 
         const response = await client.post<CreateTaskApiResponse>(
           "/openapi/v1/print/multi-color",
@@ -357,26 +447,26 @@ Examples:
         );
 
         const taskId = response.result;
+        const sourceDesc = params.input_task_id
+          ? `task "${params.input_task_id}"`
+          : `model URL`;
 
         return formatTaskCreatedResponse(
           {
             task_id: taskId,
             status: "PENDING",
-            message: `Multi-color processing started for task "${params.input_task_id}" with ${params.max_colors} colors (depth: ${params.max_depth}). Cost: 10 credits.`,
+            message: `Multi-color processing started for ${sourceDesc} with ${params.max_colors} colors (depth: ${params.max_depth}). Cost: 10 credits.`,
             estimated_time: "2-5 minutes"
           },
           params.response_format as ResponseFormat,
           "Multi-Color Processing Task Created",
-          `Processing model from task "${params.input_task_id}" into ${params.max_colors} colors (depth: ${params.max_depth}). The output will be a 3MF file for multi-color 3D printing.`,
+          `Processing ${sourceDesc} into ${params.max_colors} colors (depth: ${params.max_depth}). The output will be a 3MF file for multi-color 3D printing.`,
           "multi-color-print"
         );
       } catch (error) {
         return {
           isError: true,
-          content: [{
-            type: "text",
-            text: handleMeshyError(error)
-          }]
+          content: [{ type: "text", text: handleMeshyError(error) }]
         };
       }
     }
