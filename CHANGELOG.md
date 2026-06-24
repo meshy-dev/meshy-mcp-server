@@ -1,5 +1,42 @@
 # Changelog
 
+## [0.4.0] - 2026-06-24
+
+### Added
+
+- **`meshy_convert`** — new tool calling `POST /openapi/v1/convert` (1 credit)
+  - Dedicated, cheaper format conversion than remesh; `target_formats` required
+  - Options: glb, fbx, obj, usdz, blend, stl, 3mf
+  - Provide exactly one of `input_task_id` or `model_url`; task type `"convert"`
+- **`meshy_resize`** — new tool calling `POST /openapi/v1/resize` (1 credit)
+  - Resize to real-world dimensions; provide exactly one of `resize_height` / `resize_longest_side` / `auto_size`
+  - Provide exactly one of `input_task_id` or `model_url`; task type `"resize"`
+- **`meshy_uv_unwrap`** — new tool calling `POST /openapi/v1/uv-unwrap` (5 credits)
+  - Generates a clean, non-overlapping UV layout ("UV white model") before external texturing
+  - GLB only; meshes over 40,000 faces are rejected with 400 (remesh first); task type `"uv-unwrap"`
+- **`meshy_creative_lab`** — ONE tool that runs the full Creative Lab pipeline end-to-end (36 credits)
+  - Products: `figure`, `lamp`, `keychain`, `fridge-magnet`. Input: a source photo (image_url/file_path) or, for products that support it (e.g. lamp), `text` (+ optional `image_subject`)
+  - Internally runs prototype (6cr) → build (30cr), hides the intermediate concept image, and returns ONLY the final 3D model. Blocks while both stages run (~2–5 min) with progress notifications; if the prototype fails the build is not started (only 6cr charged)
+  - Returns the build `task_id` + model formats; download with `meshy_download_model` (task_type `"creative-lab-{product}-build"`). Backend GET routes are stage-specific (`.../v1/prototype/:id`, `.../v1/build/:id`)
+- New task types `CONVERT`, `RESIZE`, `UV_UNWRAP`, and 8 stage-specific creative-lab task types (prototype/build per product: figure, lamp, keychain, fridge-magnet) with endpoint + list routing
+- New `CreativeLabProduct` and `ConvertFormat` (includes `3mf`) enums; credit constants `CONVERT_CREDITS`, `RESIZE_CREDITS`, `UV_UNWRAP_CREDITS`, `CREATIVE_LAB_PROTOTYPE_CREDITS`, `CREATIVE_LAB_BUILD_CREDITS`, `UV_UNWRAP_MAX_FACES`
+- New request interfaces in `types.ts`: `ConvertApiRequest`, `ResizeApiRequest`, `UvUnwrapApiRequest`, `CreativeLabPrototypeApiRequest`, `CreativeLabBuildApiRequest`
+- New generation/post-processing params: `hd_texture` (4K base color), `decimation_mode` (1–4), `alpha_thumbnail` (RGBA preview → `alpha_thumbnail_url`), `multi_view_thumbnails`, `resize_longest_side` (remesh)
+- `input_task_id` chaining on `meshy_image_to_3d` and `meshy_multi_image_to_3d` — feed a SUCCEEDED text-to-image / image-to-image task's output as the image source
+- New image models on `meshy_text_to_image` / `meshy_image_to_image`: `nano-banana-2` (6 credits) and `gpt-image-2` (text 9 / image 12, limited aspect ratios)
+
+### Changed
+
+- **`meshy_get_task_status`**: now surfaces `consumed_credits` (and `alpha_thumbnail_url`) in the status output and `structuredContent`
+- **`meshy_download_model`**: now downloads **image-task output** too — `text-to-image` / `image-to-image` results live in `image_urls` (not `model_urls`), so the tool previously returned "no model URLs" and agents had to fetch the API key and curl the image manually. It now detects image tasks and saves the generated PNG/JPG locally (extension inferred from the URL); `image_urls` is also surfaced in `meshy_get_task_status` output/`structuredContent`
+- **`meshy_download_model`**: corrected the 3MF message — 3MF IS supported, but only when it was generated (request via `target_formats:["3mf"]`, or use `meshy_convert` / `meshy_process_multicolor`); added `blend` to the downloadable format list; available formats are now listed when 3MF is missing
+- **`meshy_download_model`**: for a Creative Lab build whose `model_urls` use bespoke keys (e.g. lamp → `base_stl` + `lamp_stl`) that don't match the requested `format`, it now downloads ALL parts instead of reporting "format unavailable"
+- **`task_type` is now fault-tolerant** on `meshy_get_task_status` / `meshy_cancel_task` / `meshy_download_model`: an imperfect value (e.g. `creative-lab-lamp` instead of `creative-lab-lamp-prototype`) no longer hard-rejects — it coerces and the server auto-infers the endpoint, so agents never need to fall back to manual HTTP
+- `symmetry_mode` marked **DEPRECATED** across text/image/multi-image generation schemas (no longer affects output; kept for backward compatibility)
+- `error-handler.ts`: tool-aware hints — 400 for `meshy_uv_unwrap` (GLB ≤40k faces, remesh first); 404 for `meshy_uv_unwrap` (resource not found / temporarily unavailable)
+- `instructions.ts`: cost table and usage scenarios extended (convert/resize, UV unwrap, Creative Lab end-to-end flow; updated image-model costs)
+- **Server tool count**: 20 → 24
+
 ## [0.3.0] - 2026-05-08
 
 ### Added

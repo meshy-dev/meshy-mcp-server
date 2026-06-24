@@ -98,8 +98,10 @@ Error Handling:
         if (params.model_url) request.model_url = params.model_url;
         if (params.topology) request.topology = params.topology;
         if (params.target_polycount) request.target_polycount = params.target_polycount;
-        if (params.auto_size !== undefined) request.auto_size = params.auto_size;
         if (params.origin_at) request.origin_at = params.origin_at;
+        if (params.resize_longest_side !== undefined) request.resize_longest_side = params.resize_longest_side;
+        if (params.decimation_mode !== undefined) request.decimation_mode = params.decimation_mode;
+        if (params.auto_size !== undefined) request.auto_size = params.auto_size;
 
         const response = await client.post<CreateTaskApiResponse>("/openapi/v1/remesh", request as unknown as Record<string, unknown>);
         const taskId = response.result;
@@ -215,8 +217,16 @@ Error Handling:
         if (params.text_style_prompt) request.text_style_prompt = params.text_style_prompt;
         if (params.image_style_url) request.image_style_url = params.image_style_url;
         if (params.ai_model) request.ai_model = params.ai_model;
-        if (params.remove_lighting !== undefined) request.remove_lighting = params.remove_lighting;
         if (params.target_formats) request.target_formats = params.target_formats;
+        if (params.alpha_thumbnail !== undefined) request.alpha_thumbnail = params.alpha_thumbnail;
+        // hd_texture / remove_lighting are meshy-6/latest-only; sending with meshy-5 makes the API 400.
+        {
+          const isMeshy6Retexture = params.ai_model === "meshy-6" || params.ai_model === "latest" || !params.ai_model;
+          if (isMeshy6Retexture) {
+            if (params.hd_texture !== undefined) request.hd_texture = params.hd_texture;
+            if (params.remove_lighting !== undefined) request.remove_lighting = params.remove_lighting;
+          }
+        }
 
         const response = await client.post<CreateTaskApiResponse>("/openapi/v1/retexture", request as unknown as Record<string, unknown>);
         const taskId = response.result;

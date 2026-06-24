@@ -11,7 +11,7 @@ import { ResponseFormatSchema, PromptSchema, UrlSchema } from "./common.js";
  */
 export const TextToImageInputSchema = z.object({
   ai_model: z.nativeEnum(TextToImageModel)
-    .describe("AI model to use for image generation"),
+    .describe("AI model: 'nano-banana' (3 credits), 'nano-banana-2' (6), 'nano-banana-pro' (9), or 'gpt-image-2' (9). gpt-image-2 supports only a limited set of aspect ratios."),
   prompt: PromptSchema,
   generate_multi_view: z.boolean()
     .default(false)
@@ -21,7 +21,7 @@ export const TextToImageInputSchema = z.object({
     .describe("Pose mode for character images: 'a-pose' or 't-pose'"),
   aspect_ratio: z.nativeEnum(AspectRatio)
     .default(AspectRatio.SQUARE)
-    .describe("Aspect ratio of generated image (default: '1:1')"),
+    .describe("Aspect ratio. Support is model-specific: nano-banana / nano-banana-2 / nano-banana-pro accept '1:1','16:9','9:16','4:3','3:4'; gpt-image-2 accepts ONLY '1:1','3:2','2:3' ('3:2'/'2:3' are gpt-image-2-only and rejected by the nano-banana family). Default '1:1'."),
   response_format: ResponseFormatSchema
 }).strict();
 
@@ -30,7 +30,7 @@ export const TextToImageInputSchema = z.object({
  */
 export const ImageToImageInputSchema = z.object({
   ai_model: z.nativeEnum(TextToImageModel)
-    .describe("AI model to use for image transformation"),
+    .describe("AI model: 'nano-banana' (3 credits), 'nano-banana-2' (6), 'nano-banana-pro' (9), or 'gpt-image-2' (12 for image-to-image)."),
   prompt: PromptSchema,
   reference_image_urls: z.array(z.string())
     .min(1)

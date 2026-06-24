@@ -24,14 +24,16 @@ import { registerGenerationTools } from "./tools/generation.js";
 import { registerTaskTools } from "./tools/tasks.js";
 import { registerWorkspaceTools } from "./tools/workspace.js";
 import { registerPostProcessingTools } from "./tools/postprocessing.js";
+import { registerConversionTools } from "./tools/conversion.js";
 import { registerImageTools } from "./tools/image.js";
 import { registerPrintingTools } from "./tools/printing.js";
+import { registerCreativeLabTools } from "./tools/creative-lab.js";
 import { registerBalanceTool } from "./tools/balance.js";
 import { MESHY_INSTRUCTIONS } from "./instructions.js";
 
 // Create MCP server instance
 const server = new McpServer(
-  { name: "@meshy-ai/meshy-mcp-server", version: "0.2.1" },
+  { name: "@meshy-ai/meshy-mcp-server", version: "0.4.0" },
   { instructions: MESHY_INSTRUCTIONS }
 );
 
@@ -59,16 +61,22 @@ async function initializeServer() {
     registerPostProcessingTools(server, meshyClient);
     console.error("  ✓ Post-processing tools registered (remesh, retexture, rig, animate)");
 
+    registerConversionTools(server, meshyClient);
+    console.error("  ✓ Conversion tools registered (convert, resize, uv-unwrap)");
+
     registerImageTools(server, meshyClient);
     console.error("  ✓ Image tools registered (text-to-image, image-to-image)");
 
     registerPrintingTools(server, meshyClient);
     console.error("  ✓ Printing tools registered (send-to-slicer, analyze-printability, repair-printability, process-multicolor)");
 
+    registerCreativeLabTools(server, meshyClient);
+    console.error("  ✓ Creative Lab tool registered (end-to-end prototype→build)");
+
     registerBalanceTool(server, meshyClient);
     console.error("  ✓ Balance tool registered (check-balance)");
 
-    console.error("✓ Server initialized successfully with 20 tools");
+    console.error("✓ Server initialized successfully with 24 tools");
     return meshyClient;
   } catch (error) {
     console.error("Failed to initialize server:", error);
@@ -107,7 +115,7 @@ async function runHTTP() {
 
   // Health check endpoint
   app.get("/health", (req, res) => {
-    res.json({ status: "ok", server: "meshy-mcp-server", version: "0.3.0" });
+    res.json({ status: "ok", server: "meshy-mcp-server", version: "0.4.0" });
   });
 
   // MCP endpoint

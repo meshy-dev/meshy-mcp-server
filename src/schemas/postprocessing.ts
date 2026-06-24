@@ -29,9 +29,18 @@ export const RemeshInputSchema = z.object({
     .max(300000, "Polycount cannot exceed 300,000")
     .optional()
     .describe("Target polygon count for the remeshed model (100–300,000)"),
+  decimation_mode: z.number()
+    .int()
+    .min(1)
+    .max(4)
+    .optional()
+    .describe("Adaptive decimation polycount level (1=ultra, 2=high, 3=medium, 4=low). When set, target_polycount is ignored."),
   resize_height: z.number()
     .default(0)
     .describe("Resize model to this height in meters (0 = no resize). Mutually exclusive with auto_size."),
+  resize_longest_side: z.number()
+    .optional()
+    .describe("Resize so the model's longest side matches this value in meters (aspect ratio preserved). Alternative to resize_height."),
   auto_size: z.boolean()
     .optional()
     .describe("Use AI to auto-estimate real-world height. Mutually exclusive with resize_height. Default false."),
@@ -71,12 +80,18 @@ export const RetextureInputSchema = z.object({
   enable_pbr: z.boolean()
     .default(false)
     .describe("Enable physically-based rendering textures"),
+  hd_texture: z.boolean()
+    .optional()
+    .describe("Generate the base color texture at 4K (4096×4096). Default false. Only supported when ai_model is meshy-6 or latest; PBR maps stay at 2K."),
   remove_lighting: z.boolean()
     .default(true)
     .describe("Removes highlights and shadows from the base color texture for cleaner results under custom lighting. Default true. Only supported when ai_model is meshy-6 or latest"),
   target_formats: z.array(z.enum(["glb", "obj", "fbx", "stl", "usdz", "3mf"]))
     .optional()
     .describe("Output formats to generate. When omitted, produces glb/obj/fbx/stl/usdz but NOT 3mf. To get 3MF, you MUST include '3mf' explicitly."),
+  alpha_thumbnail: z.boolean()
+    .optional()
+    .describe("Also render a transparent-background (RGBA) preview, returned as alpha_thumbnail_url. Default false."),
   response_format: ResponseFormatSchema
 }).strict();
 

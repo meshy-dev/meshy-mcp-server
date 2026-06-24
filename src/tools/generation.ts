@@ -30,6 +30,8 @@ export function registerGenerationTools(server: McpServer, client: MeshyClient) 
       title: "Generate 3D Model from Text",
       description: `Generate a 3D model from a text description using Meshy AI.
 
+PREFER THE IMAGE ROUTE: for higher quality and more control, generate a design image first (meshy_text_to_image) then meshy_image_to_3d. Use direct text-to-3d for a quick draft or when the user explicitly asks for it.
+
 This tool creates a new 3D generation task and returns a task_id that can be used to poll the status. The generation process is asynchronous and typically takes 2-3 minutes.
 
 Args:
@@ -98,8 +100,14 @@ Examples:
         if (params.pose_mode) {
           request.pose_mode = params.pose_mode;
         }
+        if (params.decimation_mode !== undefined) {
+          request.decimation_mode = params.decimation_mode;
+        }
         if (params.target_formats) {
           request.target_formats = params.target_formats;
+        }
+        if (params.alpha_thumbnail !== undefined) {
+          request.alpha_thumbnail = params.alpha_thumbnail;
         }
         if (params.auto_size !== undefined) request.auto_size = params.auto_size;
         if (params.origin_at) request.origin_at = params.origin_at;
@@ -180,13 +188,17 @@ Error Handling:
     },
     async (params: z.infer<typeof ImageTo3DInputSchema>) => {
       try {
-        const imageUrl = await resolveImageSource(params.image_url, params.file_path);
-
         const request: ImageTo3DApiRequest = {
-          image_url: imageUrl,
           enable_pbr: params.enable_pbr,
           moderation: false
         };
+
+        // Image source: chain from an upstream image task, or resolve a URL/local file.
+        if (params.input_task_id) {
+          request.input_task_id = params.input_task_id;
+        } else {
+          request.image_url = await resolveImageSource(params.image_url, params.file_path);
+        }
 
         if (params.ai_model) {
           request.ai_model = params.ai_model;
@@ -218,17 +230,34 @@ Error Handling:
         if (params.texture_image_url) {
           request.texture_image_url = params.texture_image_url;
         }
-        if (params.image_enhancement !== undefined) {
-          request.image_enhancement = params.image_enhancement;
-        }
-        if (params.remove_lighting !== undefined) {
-          request.remove_lighting = params.remove_lighting;
+        // hd_texture / image_enhancement / remove_lighting are only accepted for meshy-6/latest;
+        // sending them with meshy-5 makes the API 400. Gate them on the model.
+        const isMeshy6Image = params.ai_model === "meshy-6" || params.ai_model === "latest" || !params.ai_model;
+        if (isMeshy6Image) {
+          if (params.hd_texture !== undefined) {
+            request.hd_texture = params.hd_texture;
+          }
+          if (params.image_enhancement !== undefined) {
+            request.image_enhancement = params.image_enhancement;
+          }
+          if (params.remove_lighting !== undefined) {
+            request.remove_lighting = params.remove_lighting;
+          }
         }
         if (params.save_pre_remeshed_model !== undefined) {
           request.save_pre_remeshed_model = params.save_pre_remeshed_model;
         }
+        if (params.decimation_mode !== undefined) {
+          request.decimation_mode = params.decimation_mode;
+        }
         if (params.target_formats) {
           request.target_formats = params.target_formats;
+        }
+        if (params.alpha_thumbnail !== undefined) {
+          request.alpha_thumbnail = params.alpha_thumbnail;
+        }
+        if (params.multi_view_thumbnails !== undefined) {
+          request.multi_view_thumbnails = params.multi_view_thumbnails;
         }
         if (params.auto_size !== undefined) request.auto_size = params.auto_size;
         if (params.origin_at) request.origin_at = params.origin_at;
@@ -322,11 +351,21 @@ Examples:
         if (params.texture_image_url) {
           request.texture_image_url = params.texture_image_url;
         }
-        if (params.remove_lighting !== undefined) {
-          request.remove_lighting = params.remove_lighting;
+        // hd_texture / remove_lighting are meshy-6/latest-only; sending with meshy-5 makes the API 400.
+        const isMeshy6Refine = params.ai_model === "meshy-6" || params.ai_model === "latest" || !params.ai_model;
+        if (isMeshy6Refine) {
+          if (params.hd_texture !== undefined) {
+            request.hd_texture = params.hd_texture;
+          }
+          if (params.remove_lighting !== undefined) {
+            request.remove_lighting = params.remove_lighting;
+          }
         }
         if (params.target_formats) {
           request.target_formats = params.target_formats;
+        }
+        if (params.alpha_thumbnail !== undefined) {
+          request.alpha_thumbnail = params.alpha_thumbnail;
         }
         if (params.auto_size !== undefined) request.auto_size = params.auto_size;
         if (params.origin_at) request.origin_at = params.origin_at;
@@ -402,22 +441,26 @@ Error Handling:
     },
     async (params: z.infer<typeof MultiImageTo3DInputSchema>) => {
       try {
-        let resolvedUrls: string[];
-        if (params.file_paths && params.file_paths.length > 0) {
-          resolvedUrls = await Promise.all(
-            params.file_paths.map(fp => fileToDataUri(fp))
-          );
-        } else if (params.image_urls && params.image_urls.length > 0) {
-          resolvedUrls = params.image_urls;
-        } else {
-          throw new Error("Either image_urls or file_paths must be provided.");
-        }
-
         const request: MultiImageTo3DApiRequest = {
-          image_urls: resolvedUrls,
           enable_pbr: params.enable_pbr,
           moderation: false
         };
+
+        // Image source: chain from an upstream multi-view image task, or resolve URLs/local files.
+        let imageCount = 0;
+        if (params.input_task_id) {
+          request.input_task_id = params.input_task_id;
+        } else if (params.file_paths && params.file_paths.length > 0) {
+          request.image_urls = await Promise.all(
+            params.file_paths.map(fp => fileToDataUri(fp))
+          );
+          imageCount = request.image_urls.length;
+        } else if (params.image_urls && params.image_urls.length > 0) {
+          request.image_urls = params.image_urls;
+          imageCount = request.image_urls.length;
+        } else {
+          throw new Error("Provide one of input_task_id, image_urls, or file_paths.");
+        }
 
         if (params.ai_model) request.ai_model = params.ai_model;
         if (params.model_type) request.model_type = params.model_type;
@@ -429,10 +472,18 @@ Error Handling:
         if (params.should_texture !== undefined) request.should_texture = params.should_texture;
         if (params.texture_prompt) request.texture_prompt = params.texture_prompt;
         if (params.texture_image_url) request.texture_image_url = params.texture_image_url;
-        if (params.image_enhancement !== undefined) request.image_enhancement = params.image_enhancement;
-        if (params.remove_lighting !== undefined) request.remove_lighting = params.remove_lighting;
+        // meshy-6/latest-only texture params; sending them with meshy-5 makes the API 400.
+        const isMeshy6Multi = params.ai_model === "meshy-6" || params.ai_model === "latest" || !params.ai_model;
+        if (isMeshy6Multi) {
+          if (params.hd_texture !== undefined) request.hd_texture = params.hd_texture;
+          if (params.image_enhancement !== undefined) request.image_enhancement = params.image_enhancement;
+          if (params.remove_lighting !== undefined) request.remove_lighting = params.remove_lighting;
+        }
         if (params.save_pre_remeshed_model !== undefined) request.save_pre_remeshed_model = params.save_pre_remeshed_model;
+        if (params.decimation_mode !== undefined) request.decimation_mode = params.decimation_mode;
         if (params.target_formats) request.target_formats = params.target_formats;
+        if (params.alpha_thumbnail !== undefined) request.alpha_thumbnail = params.alpha_thumbnail;
+        if (params.multi_view_thumbnails !== undefined) request.multi_view_thumbnails = params.multi_view_thumbnails;
         if (params.auto_size !== undefined) request.auto_size = params.auto_size;
         if (params.origin_at) request.origin_at = params.origin_at;
 
@@ -446,11 +497,15 @@ Error Handling:
           estimated_time: "2-3 minutes"
         };
 
+        const sourceDesc = params.input_task_id
+          ? `upstream task "${params.input_task_id}"`
+          : `${imageCount} image(s)`;
+
         return formatTaskCreatedResponse(
           output,
           params.response_format,
           "3D Generation Task Created (Multi-Image-to-3D)",
-          `Your 3D model is being generated from ${resolvedUrls.length} image(s).`,
+          `Your 3D model is being generated from ${sourceDesc}.`,
           "multi-image-to-3d"
         );
       } catch (error) {

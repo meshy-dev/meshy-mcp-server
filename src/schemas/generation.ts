@@ -12,6 +12,26 @@ import { AIModel, ModelType, SymmetryMode, Topology, PoseMode } from "../constan
 const TargetFormatsSchema = z.array(z.enum(["glb", "obj", "fbx", "stl", "usdz", "3mf"]))
   .optional()
   .describe("Output formats to generate. When omitted, produces glb/obj/fbx/stl/usdz but NOT 3mf. To get 3MF, you MUST include '3mf' explicitly (e.g. [\"glb\", \"3mf\"]). Specifying formats can reduce task completion time.");
+
+/**
+ * Shared optional parameters reused across generation/refine schemas.
+ * Defined as factory functions so each schema gets a fresh ZodType instance.
+ */
+const decimationMode = () =>
+  z.number().int().min(1).max(4).optional()
+    .describe("Adaptive decimation polycount level (1=ultra, 2=high, 3=medium, 4=low). When set, target_polycount is ignored.");
+const alphaThumbnail = () =>
+  z.boolean().optional()
+    .describe("Also render a transparent-background (RGBA) preview, returned as alpha_thumbnail_url. Default false.");
+const hdTexture = () =>
+  z.boolean().optional()
+    .describe("Generate the base color texture at 4K (4096×4096). Default false. Only supported when ai_model is meshy-6 or latest; PBR maps stay at 2K.");
+const multiViewThumbnails = () =>
+  z.boolean().optional()
+    .describe("Also return 4 cardinal-view thumbnails (front/back/left/right). Default false.");
+const deprecatedSymmetryMode = () =>
+  z.nativeEnum(SymmetryMode).optional()
+    .describe("DEPRECATED — no longer affects output (kept for backward compatibility). Values: 'off', 'auto', 'on'.");
 import {
   ResponseFormatSchema,
   PromptSchema,
@@ -38,9 +58,8 @@ export const TextTo3DInputSchema = z.object({
     .max(300000, "Polycount cannot exceed 300,000")
     .optional()
     .describe("Target polygon count for the model (100–300,000)"),
-  symmetry_mode: z.nativeEnum(SymmetryMode)
-    .optional()
-    .describe("Symmetry mode: 'off', 'auto' (default), or 'on'"),
+  decimation_mode: decimationMode(),
+  symmetry_mode: deprecatedSymmetryMode(),
   should_remesh: z.boolean()
     .optional()
     .describe("Whether to remesh. Default false for meshy-6, true for others"),
@@ -48,6 +67,7 @@ export const TextTo3DInputSchema = z.object({
     .optional()
     .describe("Pose mode for character models: 'a-pose' or 't-pose'. IMPORTANT: When the user intends to rig or animate the model, default to 't-pose' for best rigging results"),
   target_formats: TargetFormatsSchema,
+  alpha_thumbnail: alphaThumbnail(),
   auto_size: z.boolean()
     .optional()
     .describe("Use AI to auto-estimate real-world height and resize the model. Default false."),
@@ -67,6 +87,9 @@ export const ImageTo3DInputSchema = z.object({
   file_path: z.string()
     .optional()
     .describe("ABSOLUTE path to LOCAL image (.jpg/.png). PREFERRED for local files. Server auto-encodes. Example: /Users/me/photo.jpg. NEVER manually base64-encode."),
+  input_task_id: z.string()
+    .optional()
+    .describe("Chain from a SUCCEEDED text-to-image or image-to-image task: use its generated image as the input instead of image_url/file_path. Provide only one image source."),
   ai_model: z.nativeEnum(AIModel)
     .default(AIModel.LATEST)
     .describe("AI model: 'meshy-5', 'meshy-6', or 'latest' (default, currently resolves to Meshy 6). IMPORTANT: Before calling this tool, ask the user which model to use and explain the differences: meshy-6/latest = best quality (20 credits), meshy-5 = previous gen (5 credits)"),
@@ -88,12 +111,11 @@ export const ImageTo3DInputSchema = z.object({
     .max(300000, "Polycount cannot exceed 300,000")
     .optional()
     .describe("Target polygon count for the model (100–300,000)"),
+  decimation_mode: decimationMode(),
   should_remesh: z.boolean()
     .optional()
     .describe("Whether to remesh. Default false for meshy-6, true for others"),
-  symmetry_mode: z.nativeEnum(SymmetryMode)
-    .optional()
-    .describe("Symmetry mode: 'off', 'auto' (default), or 'on'"),
+  symmetry_mode: deprecatedSymmetryMode(),
   should_texture: z.boolean()
     .optional()
     .describe("Whether to generate textures. Default true"),
@@ -104,6 +126,7 @@ export const ImageTo3DInputSchema = z.object({
   texture_image_url: UrlSchema
     .optional()
     .describe("Image URL to guide texturing"),
+  hd_texture: hdTexture(),
   image_enhancement: z.boolean()
     .optional()
     .describe("Optimize input image for better results. Default true. Meshy-6/latest only"),
@@ -114,6 +137,8 @@ export const ImageTo3DInputSchema = z.object({
     .optional()
     .describe("Store GLB before remeshing. Default false. Only applies when should_remesh is true"),
   target_formats: TargetFormatsSchema,
+  alpha_thumbnail: alphaThumbnail(),
+  multi_view_thumbnails: multiViewThumbnails(),
   auto_size: z.boolean()
     .optional()
     .describe("Use AI to auto-estimate real-world height and resize the model. Default false."),
@@ -143,10 +168,12 @@ export const TextTo3DRefineInputSchema = z.object({
   ai_model: z.nativeEnum(AIModel)
     .default(AIModel.LATEST)
     .describe("AI model: 'meshy-5', 'meshy-6', or 'latest' (default, currently resolves to Meshy 6). IMPORTANT: Before calling this tool, ask the user which model to use and explain the differences: meshy-6/latest = best quality (10 credits), meshy-5 = previous gen (10 credits)"),
+  hd_texture: hdTexture(),
   remove_lighting: z.boolean()
     .default(true)
     .describe("Removes highlights and shadows from the base color texture for cleaner results under custom lighting. Default true. Only supported when ai_model is meshy-6 or latest"),
   target_formats: TargetFormatsSchema,
+  alpha_thumbnail: alphaThumbnail(),
   auto_size: z.boolean()
     .optional()
     .describe("Use AI to auto-estimate real-world height and resize the model. Default false."),
@@ -170,6 +197,9 @@ export const MultiImageTo3DInputSchema = z.object({
     .max(4)
     .optional()
     .describe("Array of 1–4 absolute paths to local image files (.jpg, .jpeg, .png). The server reads and encodes them automatically"),
+  input_task_id: z.string()
+    .optional()
+    .describe("Chain from a SUCCEEDED text-to-image / image-to-image task that produced multi-view images, using them as the input instead of image_urls/file_paths."),
   ai_model: z.nativeEnum(AIModel)
     .default(AIModel.LATEST)
     .describe("AI model: 'meshy-5', 'meshy-6', or 'latest' (default, currently resolves to Meshy 6). IMPORTANT: Before calling this tool, ask the user which model to use and explain the differences: meshy-6/latest = best quality (20 credits), meshy-5 = previous gen (5 credits)"),
@@ -191,12 +221,11 @@ export const MultiImageTo3DInputSchema = z.object({
     .max(300000, "Polycount cannot exceed 300,000")
     .optional()
     .describe("Target polygon count for the model (100–300,000)"),
+  decimation_mode: decimationMode(),
   should_remesh: z.boolean()
     .optional()
     .describe("Whether to remesh. Default false for meshy-6, true for others"),
-  symmetry_mode: z.nativeEnum(SymmetryMode)
-    .optional()
-    .describe("Symmetry mode: 'off', 'auto' (default), or 'on'"),
+  symmetry_mode: deprecatedSymmetryMode(),
   should_texture: z.boolean()
     .optional()
     .describe("Whether to generate textures. Default true"),
@@ -207,6 +236,7 @@ export const MultiImageTo3DInputSchema = z.object({
   texture_image_url: UrlSchema
     .optional()
     .describe("Image URL to guide texturing"),
+  hd_texture: hdTexture(),
   image_enhancement: z.boolean()
     .optional()
     .describe("Optimize input images for better results. Default true. Meshy-6/latest only"),
@@ -217,6 +247,8 @@ export const MultiImageTo3DInputSchema = z.object({
     .optional()
     .describe("Store GLB before remeshing. Default false. Only applies when should_remesh is true"),
   target_formats: TargetFormatsSchema,
+  alpha_thumbnail: alphaThumbnail(),
+  multi_view_thumbnails: multiViewThumbnails(),
   auto_size: z.boolean()
     .optional()
     .describe("Use AI to auto-estimate real-world height and resize the model. Default false."),

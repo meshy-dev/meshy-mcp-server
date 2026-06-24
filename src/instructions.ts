@@ -20,7 +20,11 @@ Before calling ANY tool that costs credits, present the cost and wait for user c
 | meshy_rig | 5 (includes walking + running) |
 | meshy_animate | 3 |
 | meshy_process_multicolor | 10 |
-| meshy_text_to_image / meshy_image_to_image | 3–9 |
+| meshy_convert | 1 |
+| meshy_resize | 1 |
+| meshy_uv_unwrap | 5 |
+| meshy_creative_lab | 36 (prototype 6 + build 30, run end-to-end) |
+| meshy_text_to_image / meshy_image_to_image | nano-banana 3 / nano-banana-2 6 / nano-banana-pro 9 / gpt-image-2: text 9, image 12 |
 
 ## Rule 2: Determine Output Format BEFORE Generating
 The API parameter target_formats controls which formats are produced. Decide the output format before calling any generation tool, because target_formats must be set at creation time. Ask user about their intended use first.
@@ -80,6 +84,27 @@ Trigger: user wants to change textures/style of existing model.
 Suggested flow:
 1. Ask user for text_style_prompt OR image_style_url (one required, image takes precedence)
 2. Apply retexture (meshy_retexture)
+
+## Scenario H: Cheap Format Conversion / Resize
+Trigger: user has an existing model (task or URL) and only needs another file format, or wants it scaled to real-world dimensions — no re-generation.
+Suggested flow:
+1. Format only → meshy_convert with target_formats (1 credit). Cheaper than remesh for format-only changes; supports 3mf.
+2. Real-world size → meshy_resize (1 credit) with exactly one of resize_height / resize_longest_side / auto_size.
+3. Wait for completion (task_type "convert" / "resize"), then meshy_download_model.
+
+## Scenario I: UV Unwrap (before external texturing)
+Trigger: user wants to texture a model in Blender / Substance Painter / Unreal, or needs a clean UV layout / "UV white model".
+Suggested flow:
+1. Ensure the source is a GLB with ≤40,000 faces — if denser, run meshy_remesh with a lower target_polycount first.
+2. meshy_uv_unwrap (5 credits) with input_task_id or model_url.
+3. Wait for completion (task_type "uv-unwrap"), then meshy_download_model (format "glb"). The output is a single GLB with fresh UVs and a placeholder material.
+
+## Scenario J: Creative Lab Consumer Products (figure / keychain / fridge-magnet / lamp)
+Trigger: user wants a stylized physical-product model — chibi figure, keychain, fridge magnet, or lamp — from a photo (or, for lamp, a text prompt).
+Suggested flow:
+1. Confirm the 36-credit cost with the user.
+2. Call meshy_creative_lab once with product + a source (file_path / image_url, or text for lamp). It runs the full prototype→build pipeline internally and returns the final 3D model — the intermediate concept image is internal and is NOT shown to the user.
+3. Download the result with meshy_download_model (task_type "creative-lab-{product}-build"); for lamp this saves all parts (lamp + base STLs).
 
 ## Scenario G: General 3D Model (default)
 Trigger: none of the above.

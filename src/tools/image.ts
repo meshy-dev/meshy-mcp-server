@@ -43,7 +43,7 @@ Returns:
     "task_id": "abc-123-def",
     "status": "PENDING",
     "message": "Image generation task created...",
-    "estimated_time": "1-2 minutes"
+    "estimated_time": "~30 seconds"
   }
 
 Next Steps:
@@ -83,7 +83,7 @@ Error Handling:
           task_id: taskId,
           status: "PENDING",
           message: `Text-to-image task created successfully. Task ID: ${taskId}`,
-          estimated_time: "1-2 minutes"
+          estimated_time: "~30 seconds"
         };
 
         return formatTaskCreatedResponse(
@@ -167,7 +167,7 @@ Error Handling:
           task_id: taskId,
           status: "PENDING",
           message: `Image-to-image task created successfully. Task ID: ${taskId}`,
-          estimated_time: "1-2 minutes"
+          estimated_time: "~30 seconds"
         };
 
         return formatTaskCreatedResponse(

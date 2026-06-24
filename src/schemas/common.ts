@@ -56,4 +56,5 @@ export const PromptSchema = z.string()
  */
 export const TaskTypeSchema = z.nativeEnum(TaskType)
   .default(TaskType.TEXT_TO_3D)
-  .describe("Task type to determine correct API endpoint. Defaults to 'text-to-3d'");
+  .catch(TaskType.TEXT_TO_3D)
+  .describe("Task type for endpoint routing. Common values: 'text-to-3d', 'image-to-3d', 'multi-image-to-3d', 'remesh', 'retexture', 'rigging', 'animation', 'text-to-image', 'image-to-image', 'convert', 'resize', 'uv-unwrap'. Creative Lab is STAGE-specific: 'creative-lab-{product}-prototype' or 'creative-lab-{product}-build' (product = figure/lamp/keychain/fridge-magnet). If omitted or unrecognized, the server auto-infers the correct endpoint by probing — so an imperfect value still resolves; never fall back to manual HTTP.");

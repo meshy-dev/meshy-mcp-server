@@ -95,7 +95,9 @@ Returns:
     "model_url": "https://..."
   }
 
-The launch_command contains {file} as placeholder. Replace it with the actual local file path before executing via Bash.`,
+The launch_command contains {file} as placeholder. Replace it with the actual local file path before executing via Bash.
+
+MULTIPLE MODELS: when opening several SEPARATE/unrelated models in a slicer (e.g. results from different generation tasks), run their open commands ONE AT A TIME with a short delay (~1–2s) between them — e.g. \`open -a "Bambu Studio" "modelA.stl"; sleep 2; open -a "Bambu Studio" "modelB.stl"\`. Firing them at once can make the slicer (Bambu Studio especially) respond to only one. (Parts of a SINGLE model belong in one project — open those together, not spaced.)`,
       inputSchema: SendToSlicerInputSchema,
       annotations: {
         readOnlyHint: true,
@@ -215,7 +217,7 @@ ${launchCmd}
       title: "Analyze Model Printability (FDM)",
       description: `Run automated FDM printability analysis on a 3D model. Cost: FREE (0 credits).
 
-Reports watertightness, volume, holes, non-manifold edges, and degenerate faces. Use this BEFORE 3D printing to decide whether the mesh needs repair (\`meshy_repair_printability\`).
+This is the authoritative way to answer "is this model printable / suitable for 3D printing / ready to print?". Printability here means geometry validity — watertightness, manifold edges, holes, degenerate faces, and volume — measured by this check. It's free, so run it whenever printability is the question, then use the result to decide whether the mesh needs repair (\`meshy_repair_printability\`).
 
 Provide EXACTLY ONE of:
   - input_task_id: a SUCCEEDED Meshy task. **Must use Meshy 6 or any Preview model**. Supported task types: text-to-3d, image-to-3d, multi-image-to-3d, remesh, retexture.
@@ -399,7 +401,7 @@ Provide EXACTLY ONE of input_task_id / model_url.
 
 Args:
   - input_task_id (string, optional): Task ID of a completed TEXTURED model. Mutually exclusive with model_url.
-  - model_url (string, optional): Public URL of a textured .glb or .fbx model. Mutually exclusive with input_task_id.
+  - model_url (string, optional): Public URL or data URI of a textured .glb or .fbx model. Mutually exclusive with input_task_id.
   - max_colors (number): Max colors for segmentation (1-16, default: 4). MUST confirm with user based on their printer capability.
   - max_depth (number): Segmentation depth (3-6, default: 4). Higher = finer separation, larger file. MUST confirm with user.
   - response_format (enum): "markdown" or "json" (default: "markdown")
@@ -456,7 +458,7 @@ Examples:
             task_id: taskId,
             status: "PENDING",
             message: `Multi-color processing started for ${sourceDesc} with ${params.max_colors} colors (depth: ${params.max_depth}). Cost: 10 credits.`,
-            estimated_time: "2-5 minutes"
+            estimated_time: "~1 minute"
           },
           params.response_format as ResponseFormat,
           "Multi-Color Processing Task Created",

@@ -58,10 +58,17 @@ export function handleMeshyError(error: unknown, context?: ErrorContext): string
           return "Error: Meshy service error. Please try again later.";
       }
 
+      const tool = context?.tool;
+
       // Handle HTTP status codes
       switch (status) {
-        case 400:
-          return `Error: Invalid request. ${errorData?.message || "Please check your parameters."}`;
+        case 400: {
+          let hint = "";
+          if (tool === "meshy_uv_unwrap") {
+            hint = " For UV Unwrap, the source must be a GLB with ≤40,000 faces — run `meshy_remesh` with a lower target_polycount first if the mesh is too dense.";
+          }
+          return `Error: Invalid request. ${errorData?.message || "Please check your parameters."}${hint}`;
+        }
 
         case 401:
           return "Error: Authentication failed. Please check your MESHY_API_KEY is valid.";
@@ -69,8 +76,15 @@ export function handleMeshyError(error: unknown, context?: ErrorContext): string
         case 403:
           return "Error: Permission denied. Your API key may not have access to this resource.";
 
-        case 404:
+        case 404: {
+          if (tool === "meshy_uv_unwrap") {
+            return "Error: UV Unwrap could not find that resource, or the service is temporarily unavailable. Verify the input_task_id / model_url is correct and points to a GLB, then try again — or contact Meshy support if it persists.";
+          }
+          if (tool === "meshy_creative_lab") {
+            return "Error: Creative Lab resource not found. The product may not be available for your account/plan, or the task expired — verify the product and try again, or contact Meshy support.";
+          }
           return "Error: Resource not found. Please check the ID is correct.";
+        }
 
         case 429:
           return "Error: Rate limit exceeded. Please wait before making more requests.";

@@ -44,14 +44,17 @@ export interface TextTo3DApiRequest {
   symmetry_mode?: string;
   should_remesh?: boolean;
   pose_mode?: string;
+  decimation_mode?: number;
   target_formats?: string[];
+  alpha_thumbnail?: boolean;
   auto_size?: boolean;
   origin_at?: string;
 }
 
 // Image-to-3D API request body
 export interface ImageTo3DApiRequest {
-  image_url: string;
+  image_url?: string;
+  input_task_id?: string;
   enable_pbr: boolean;
   moderation: boolean;
   ai_model?: string;
@@ -64,10 +67,14 @@ export interface ImageTo3DApiRequest {
   should_texture?: boolean;
   texture_prompt?: string;
   texture_image_url?: string;
+  hd_texture?: boolean;
   image_enhancement?: boolean;
   remove_lighting?: boolean;
   save_pre_remeshed_model?: boolean;
+  decimation_mode?: number;
   target_formats?: string[];
+  alpha_thumbnail?: boolean;
+  multi_view_thumbnails?: boolean;
   auto_size?: boolean;
   origin_at?: string;
 }
@@ -80,15 +87,18 @@ export interface TextTo3DRefineApiRequest {
   ai_model: string;
   texture_prompt?: string;
   texture_image_url?: string;
+  hd_texture?: boolean;
   remove_lighting?: boolean;
   target_formats?: string[];
+  alpha_thumbnail?: boolean;
   auto_size?: boolean;
   origin_at?: string;
 }
 
 // Multi-Image-to-3D API request body
 export interface MultiImageTo3DApiRequest {
-  image_urls: string[];
+  image_urls?: string[];
+  input_task_id?: string;
   enable_pbr: boolean;
   moderation: boolean;
   ai_model?: string;
@@ -101,10 +111,14 @@ export interface MultiImageTo3DApiRequest {
   should_texture?: boolean;
   texture_prompt?: string;
   texture_image_url?: string;
+  hd_texture?: boolean;
   image_enhancement?: boolean;
   remove_lighting?: boolean;
   save_pre_remeshed_model?: boolean;
+  decimation_mode?: number;
   target_formats?: string[];
+  alpha_thumbnail?: boolean;
+  multi_view_thumbnails?: boolean;
   auto_size?: boolean;
   origin_at?: string;
 }
@@ -118,8 +132,10 @@ export interface RemeshApiRequest {
   model_url?: string;
   topology?: string;
   target_polycount?: number;
-  auto_size?: boolean;
   origin_at?: string;
+  decimation_mode?: number;
+  resize_longest_side?: number;
+  auto_size?: boolean;
 }
 
 // Retexture API request body
@@ -131,8 +147,47 @@ export interface RetextureApiRequest {
   text_style_prompt?: string;
   image_style_url?: string;
   ai_model?: string;
+  hd_texture?: boolean;
   remove_lighting?: boolean;
   target_formats?: string[];
+  alpha_thumbnail?: boolean;
+}
+
+// Convert API request body (POST /openapi/v1/convert) — exactly one of input_task_id / model_url
+export interface ConvertApiRequest {
+  target_formats: string[];
+  input_task_id?: string;
+  model_url?: string;
+}
+
+// Resize API request body (POST /openapi/v1/resize) — exactly one of input_task_id / model_url,
+// and exactly one resize mode (resize_height / resize_longest_side / auto_size).
+export interface ResizeApiRequest {
+  input_task_id?: string;
+  model_url?: string;
+  resize_height?: number;
+  resize_longest_side?: number;
+  auto_size?: boolean;
+  origin_at?: string;
+}
+
+// UV Unwrap API request body (POST /openapi/v1/uv-unwrap) — exactly one of input_task_id / model_url (GLB only)
+export interface UvUnwrapApiRequest {
+  input_task_id?: string;
+  model_url?: string;
+}
+
+// Creative Lab API request bodies (POST /openapi/creative-lab/<product>/v1/{prototype|build})
+export interface CreativeLabPrototypeApiRequest {
+  image_url?: string;
+  text?: string;
+  image_subject?: string;
+  name?: string;
+}
+
+export interface CreativeLabBuildApiRequest {
+  input_task_id: string;
+  name?: string;
 }
 
 // Rig API request body
@@ -238,8 +293,13 @@ export interface Task {
   // Populated only on print-analyze tasks once SUCCEEDED
   printability?: PrintabilityResult;
   thumbnail_url?: string;
+  alpha_thumbnail_url?: string;
+  // Image-generation tasks (text-to-image / image-to-image) return their result here, not in model_urls.
+  image_urls?: string[];
   texture_urls?: TextureUrlsObject[] | TextureUrlsObject;
   video_url?: string;
+  // Credits consumed by this task (present on most GET responses; 0 for FAILED tasks)
+  consumed_credits?: number;
   vertex_count?: number;
   face_count?: number;
   aabb?: {

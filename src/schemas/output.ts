@@ -37,8 +37,10 @@ export const TaskStatusOutputSchema = z.object({
   poll_count: z.number().optional().describe("Number of polls performed (wait mode only)"),
   // success fields
   model_urls: z.record(z.string()).optional().describe("Available model download URLs"),
+  image_urls: z.array(z.string()).optional().describe("Generated image URLs (text-to-image / image-to-image tasks)"),
   vertex_count: z.number().optional().describe("Number of vertices in the model"),
   face_count: z.number().optional().describe("Number of faces in the model"),
+  consumed_credits: z.number().optional().describe("Credits consumed by the task (0 for FAILED — credits are refunded on failure)"),
   // error fields
   error_code: z.string().optional().describe("Error code if task failed"),
   error_message: z.string().optional().describe("Error message if task failed")

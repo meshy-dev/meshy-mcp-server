@@ -139,10 +139,11 @@ function sleep(ms: number): Promise<void> {
 /**
  * Render a progress bar
  */
-function renderProgressBar(progress: number, width = 20): string {
+function renderProgressBar(progress: number, width = 20, withPercent = true): string {
   const clamped = Math.max(0, Math.min(100, progress));
   const filled = Math.round((clamped / 100) * width);
-  return `[${'█'.repeat(filled)}${'░'.repeat(width - filled)}] ${clamped}%`;
+  const bar = `[${'█'.repeat(filled)}${'░'.repeat(width - filled)}]`;
+  return withPercent ? `${bar} ${clamped}%` : bar;
 }
 
 /**
@@ -167,6 +168,8 @@ function formatTask(task: Task, format: ResponseFormat): string {
       const formats = Object.keys(task.model_urls).filter(k => task.model_urls![k as keyof typeof task.model_urls]);
       lines.push(`- **Available Formats**: ${formats.join(', ').toUpperCase()}`);
       if (task.thumbnail_url) lines.push(`- **Thumbnail**: ${task.thumbnail_url}`);
+      if (task.alpha_thumbnail_url) lines.push(`- **Alpha Thumbnail**: ${task.alpha_thumbnail_url}`);
+      if (typeof task.consumed_credits === "number") lines.push(`- **Credits Consumed**: ${task.consumed_credits}`);
 
       if (task.vertex_count && task.face_count) {
         lines.push(`- **Vertices**: ${task.vertex_count.toLocaleString()}`);
@@ -194,6 +197,12 @@ function formatTask(task: Task, format: ResponseFormat): string {
       }
 
       lines.push("**Next Steps**: Use `meshy_download_model` to get download URLs.");
+    } else if (task.status === TaskStatus.SUCCEEDED && task.image_urls && task.image_urls.length > 0) {
+      lines.push("## Result");
+      lines.push(`- **Generated Image(s)**: ${task.image_urls.length}`);
+      if (typeof task.consumed_credits === "number") lines.push(`- **Credits Consumed**: ${task.consumed_credits}`);
+      lines.push("");
+      lines.push("**Next Steps**: Use `meshy_download_model` to save the image(s) locally.");
     } else if (task.status === TaskStatus.IN_PROGRESS) {
       if (progress >= 95) {
         lines.push("The task is in finalization (this is normal and can take 30-120s). Do NOT cancel.");
@@ -235,9 +244,12 @@ function buildWaitSuccessResponse(
     "",
     `${renderProgressBar(100)} — SUCCEEDED (${waitTimeSec}s, ${pollCount} polls)`,
     "",
-    `**Task ID**: ${taskId}`,
-    ""
+    `**Task ID**: ${taskId}`
   ];
+  if (typeof task.consumed_credits === "number") {
+    lines.push(`**Credits Consumed**: ${task.consumed_credits}`);
+  }
+  lines.push("");
 
   // Model info
   if (task.vertex_count && task.face_count) {
@@ -257,6 +269,13 @@ function buildWaitSuccessResponse(
       lines.push(`${formats.join(", ").toUpperCase()}`);
       lines.push("");
     }
+  }
+
+  // Image-generation results (text-to-image / image-to-image)
+  if (task.image_urls && task.image_urls.length > 0) {
+    lines.push(`## Generated Image(s)`);
+    lines.push(`${task.image_urls.length} image(s) available.`);
+    lines.push("");
   }
 
   // Rigging results
@@ -335,8 +354,10 @@ function buildWaitSuccessResponse(
       wait_time_seconds: waitTimeSec,
       poll_count: pollCount,
       model_urls: Object.keys(modelUrls).length > 0 ? modelUrls : undefined,
+      image_urls: task.image_urls && task.image_urls.length > 0 ? task.image_urls : undefined,
       vertex_count: task.vertex_count,
       face_count: task.face_count,
+      consumed_credits: task.consumed_credits,
       printability: task.printability
     }
   };
@@ -406,8 +427,10 @@ Examples:
               status: task.status,
               progress: task.progress || 0,
               model_urls: Object.keys(modelUrls).length > 0 ? modelUrls : undefined,
+              image_urls: task.image_urls && task.image_urls.length > 0 ? task.image_urls : undefined,
               vertex_count: task.vertex_count,
               face_count: task.face_count,
+              consumed_credits: task.consumed_credits,
               error_code: task.task_error?.code,
               error_message: task.task_error?.message
             }
@@ -462,7 +485,7 @@ Examples:
                   progressToken: extra._meta.progressToken,
                   progress: progress,
                   total: 100,
-                  message: `${task.status} - ${renderProgressBar(progress)}`
+                  message: `${task.status} - ${renderProgressBar(progress, 20, false)}`
                 }
               });
             } catch {
@@ -874,10 +897,12 @@ The task has been canceled successfully.`;
   server.registerTool(
     "meshy_download_model",
     {
-      title: "Get Model Download URLs",
-      description: `Download a completed 3D model to local disk with automatic file organization.
+      title: "Download Model or Image",
+      description: `Download a completed task's output to local disk with automatic file organization.
 
-IMPORTANT: Ask the user which format they need BEFORE downloading. Do NOT download all formats.
+Handles both 3D models and 2D images: 3D tasks save the chosen model \`format\`; image tasks (text-to-image / image-to-image) save the generated PNG/JPG image(s) and ignore \`format\`.
+
+IMPORTANT: For 3D models, ask the user which format they need BEFORE downloading. Do NOT download all formats.
 Format recommendations: GLB (viewing), OBJ (white model printing), 3MF (multicolor printing), FBX (game engines), USDZ (AR).
 
 By default, files are auto-saved to meshy_output/ under the current working directory with smart naming and history tracking. Use save_to to override with a custom path.
@@ -885,7 +910,7 @@ By default, files are auto-saved to meshy_output/ under the current working dire
 Args:
   - task_id (string): Task ID of completed model (required)
   - task_type (enum, optional): Task type to route to correct endpoint (default: "text-to-3d"). Auto-infers if wrong.
-  - format (enum): Model format - "glb", "fbx", "usdz", "stl", "obj", or "3mf" (default: "glb"). IMPORTANT: Ask user which format they need before downloading.
+  - format (enum): Model format - "glb", "fbx", "usdz", "stl", "obj", "blend", or "3mf" (default: "glb"). IMPORTANT: Ask user which format they need before downloading. NOTE: "3mf" is downloadable only if it was generated — request it via target_formats:["3mf"] at creation, or use meshy_convert / meshy_process_multicolor.
   - include_textures (boolean): Include texture files (default: true)
   - save_to (string, optional): Override auto path with a custom ABSOLUTE path. If omitted, auto-saves to meshy_output/{timestamp}_{prompt}_{id}/.
   - parent_task_id (string, optional): Parent task ID for chaining (e.g., preview_task_id for refine). Places output in the same project folder.
@@ -926,31 +951,170 @@ Error Handling:
           };
         }
 
+        // Image-generation tasks (text-to-image / image-to-image) return image_urls (PNG/JPG),
+        // not model_urls. Download the image(s) directly — the `format` arg is ignored here.
+        const isImageTask =
+          params.task_type === TaskType.TEXT_TO_IMAGE ||
+          params.task_type === TaskType.IMAGE_TO_IMAGE ||
+          (!task.model_urls && Array.isArray(task.image_urls) && task.image_urls.length > 0);
+        if (isImageTask) {
+          const imageUrls = task.image_urls || [];
+          if (imageUrls.length === 0) {
+            return {
+              isError: true,
+              content: [{ type: "text", text: "Error: Task completed but no image URLs are available." }]
+            };
+          }
+          // Derive the file extension from the image URL (strip query); Meshy serves png/jpg/webp.
+          const imgExt = (u: string) => {
+            const m = u.split("?")[0].match(/\.(png|jpe?g|webp)$/i);
+            return m ? `.${m[1].toLowerCase()}` : ".png";
+          };
+
+          const savedPaths: string[] = [];
+          let projectDir: string | undefined;
+          if (params.save_to) {
+            const dir = path.dirname(params.save_to);
+            const stem = path.basename(params.save_to, path.extname(params.save_to));
+            for (let i = 0; i < imageUrls.length; i++) {
+              const target = imageUrls.length === 1
+                ? params.save_to
+                : path.join(dir, `${stem}_${i}${imgExt(imageUrls[i])}`);
+              await downloadFileToLocal(imageUrls[i], target);
+              savedPaths.push(target);
+            }
+          } else {
+            const stage = inferStage(params.task_type, task.type);
+            projectDir = resolveProjectDir(
+              params.task_id,
+              params.task_type,
+              task.prompt,
+              params.parent_task_id,
+              task.created_at
+            );
+            for (let i = 0; i < imageUrls.length; i++) {
+              const ext = imgExt(imageUrls[i]);
+              const target = path.join(projectDir, imageUrls.length === 1 ? `${stage}${ext}` : `${stage}_${i}${ext}`);
+              await downloadFileToLocal(imageUrls[i], target);
+              savedPaths.push(target);
+            }
+            const record: TaskRecord = {
+              task_id: params.task_id,
+              task_type: params.task_type,
+              stage,
+              prompt: task.prompt,
+              status: task.status,
+              files: savedPaths.map(p => path.basename(p)),
+              created_at: new Date().toISOString()
+            };
+            recordTask(projectDir, record);
+          }
+
+          const output = {
+            image_urls: imageUrls,
+            local_paths: savedPaths,
+            project_dir: projectDir,
+            count: savedPaths.length,
+            expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+          };
+          const textContent = `# Image(s) Downloaded
+
+**Task ID**: ${params.task_id}
+**Saved ${savedPaths.length} image(s)**:
+${savedPaths.map(p => `- ${p}`).join("\n")}${projectDir ? `\n**Project Folder**: ${projectDir}` : ""}
+
+**Note**: Source URLs expire after 24 hours; the local files are permanent.`;
+          return {
+            content: [{ type: "text", text: textContent }],
+            structuredContent: output
+          };
+        }
+
         let fmt = params.format;
 
-        // 3MF format: not yet supported by API
+        // Creative Lab build products can expose bespoke multi-part model_urls
+        // (e.g. lamp → base_stl + lamp_stl) that don't match the standard `format` keys.
+        // When the requested format isn't a direct key, download every available part.
+        if (
+          params.task_type.startsWith("creative-lab-") &&
+          params.task_type.endsWith("-build") &&
+          task.model_urls &&
+          !task.model_urls[fmt as keyof typeof task.model_urls]
+        ) {
+          const parts = (Object.entries(task.model_urls) as [string, string][]).filter(([, v]) => Boolean(v));
+          if (parts.length > 0) {
+            const modelExt = (u: string) => {
+              const m = u.split("?")[0].match(/\.(glb|gltf|obj|mtl|fbx|usdz|stl|3mf|blend)$/i);
+              return m ? `.${m[1].toLowerCase()}` : "";
+            };
+            const clPaths: string[] = [];
+            let clProjectDir: string | undefined;
+            if (params.save_to) {
+              const dir = path.dirname(params.save_to);
+              const stem = path.basename(params.save_to, path.extname(params.save_to));
+              for (const [key, url] of parts) {
+                const target = path.join(dir, `${stem}_${key}${modelExt(url)}`);
+                await downloadFileToLocal(url, target);
+                clPaths.push(target);
+              }
+            } else {
+              const stage = inferStage(params.task_type, task.type);
+              clProjectDir = resolveProjectDir(params.task_id, params.task_type, task.prompt, params.parent_task_id, task.created_at);
+              for (const [key, url] of parts) {
+                const target = path.join(clProjectDir, `${key}${modelExt(url)}`);
+                await downloadFileToLocal(url, target);
+                clPaths.push(target);
+              }
+              const record: TaskRecord = {
+                task_id: params.task_id,
+                task_type: params.task_type,
+                stage,
+                prompt: task.prompt,
+                status: task.status,
+                files: clPaths.map(p => path.basename(p)),
+                created_at: new Date().toISOString()
+              };
+              recordTask(clProjectDir, record);
+            }
+            const output = {
+              model_urls: task.model_urls,
+              local_paths: clPaths,
+              project_dir: clProjectDir,
+              count: clPaths.length,
+              expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+            };
+            const textContent = `# Creative Lab Product Downloaded
+
+**Task ID**: ${params.task_id}
+**Saved ${clPaths.length} file(s)**:
+${clPaths.map(p => `- ${p}`).join("\n")}${clProjectDir ? `\n**Project Folder**: ${clProjectDir}` : ""}
+
+**Note**: Source URLs expire after 24 hours; the local files are permanent.`;
+            return {
+              content: [{ type: "text", text: textContent }],
+              structuredContent: output
+            };
+          }
+        }
+
+        // 3MF is supported, but only if it was actually generated for this task. 3MF is NOT
+        // included by default — it must be requested at creation via target_formats: ["3mf"],
+        // or produced by the multi-color print / convert tools.
         if (fmt === "3mf" && !task.model_urls?.["3mf" as keyof typeof task.model_urls]) {
-          const hasObj = !!task.model_urls?.obj;
+          const available = task.model_urls ? Object.keys(task.model_urls).join(", ") : "none";
           return {
             isError: true,
             content: [{
               type: "text",
-              text: `# 3MF Format Not Yet Supported
+              text: `# 3MF Not Available For This Task
 
-3MF download is not yet available. This feature is coming soon.
+This task did not generate a 3MF file. 3MF is **not** included by default — it must be requested up front.
 
-${hasObj
-  ? `This model has **OBJ** format available. Would you like to download the OBJ file instead?
+**How to get a 3MF**:
+- **Regenerate / convert**: include \`"3mf"\` in \`target_formats\` on the generate/refine/remesh call, or run \`meshy_convert\` with \`target_formats: ["3mf"]\` on this task (1 credit).
+- **Multi-color printing**: \`meshy_process_multicolor\` always outputs a 3MF directly.
 
-OBJ files can be imported directly into most slicer software:
-- **Bambu Studio**: File → Import → select .obj file
-- **OrcaSlicer**: File → Import → select .obj file
-- **Cura**: File → Open File(s) → select .obj file
-- **Creality Print**: File → Open → select .obj file
-- **PrusaSlicer**: File → Import → select .obj file
-
-**IMPORTANT**: Please confirm before I proceed with the OBJ download. Do NOT use \`meshy_send_to_slicer\` — manually import the downloaded file in your slicer instead.`
-  : `Unfortunately, OBJ format is also not available for this model. Available formats: ${task.model_urls ? Object.keys(task.model_urls).join(', ') : 'none'}`}`
+**Available formats for this task**: ${available}. For single-color FDM printing, downloading \`stl\` (or converting to it) also works.`
             }]
           };
         }
@@ -1097,27 +1261,33 @@ OBJ files can be imported directly into most slicer software:
           const fileSizeMB = (fileSize / (1024 * 1024)).toFixed(2);
           const savedFiles = [path.basename(savePath)];
 
-          // Download textures alongside the model
+          // Download textures. When a model carries many texture maps (e.g. a full PBR set),
+          // group them in a dedicated subfolder so they don't scatter flat next to other files.
           const savedTextures: string[] = [];
           if (params.include_textures && textureUrls) {
-            for (const [texType, texUrl] of Object.entries(textureUrls)) {
-              if (texUrl && typeof texUrl === "string") {
-                try {
-                  let texPath: string;
-                  if (projectDir) {
-                    texPath = getTextureFilePath(projectDir, stage, texType, texUrl);
-                  } else {
-                    const saveDir = path.dirname(savePath);
-                    const baseName = path.basename(savePath, path.extname(savePath));
-                    const texExt = texUrl.includes(".png") ? ".png" : ".jpg";
-                    texPath = path.join(saveDir, `${baseName}_${texType}${texExt}`);
-                  }
-                  await downloadFileToLocal(texUrl, texPath);
-                  savedTextures.push(texPath);
-                  savedFiles.push(path.basename(texPath));
-                } catch {
-                  // Texture download failed, continue
+            const texEntries = (Object.entries(textureUrls) as [string, string][])
+              .filter(([, u]) => u && typeof u === "string");
+            const manyTextures = texEntries.length > 2;
+            const baseName = path.basename(savePath, path.extname(savePath));
+            const texDir = manyTextures
+              ? (projectDir ? path.join(projectDir, "textures") : path.join(path.dirname(savePath), `${baseName}_textures`))
+              : undefined;
+            for (const [texType, texUrl] of texEntries) {
+              try {
+                const texExt = texUrl.split("?")[0].toLowerCase().includes(".png") ? ".png" : ".jpg";
+                let texPath: string;
+                if (texDir) {
+                  texPath = path.join(texDir, `${texType}${texExt}`);
+                } else if (projectDir) {
+                  texPath = getTextureFilePath(projectDir, stage, texType, texUrl);
+                } else {
+                  texPath = path.join(path.dirname(savePath), `${baseName}_${texType}${texExt}`);
                 }
+                await downloadFileToLocal(texUrl, texPath);
+                savedTextures.push(texPath);
+                savedFiles.push(texDir ? path.join(path.basename(texDir), path.basename(texPath)) : path.basename(texPath));
+              } catch {
+                // Texture download failed, continue
               }
             }
           }
