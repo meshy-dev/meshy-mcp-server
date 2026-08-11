@@ -3,6 +3,14 @@ name: Publish to npm
 on:
   release:
     types: [published]
+  # Manual re-run: the v0.3.0 and v0.4.0 releases are already cut but their
+  # publish runs failed, and a GitHub Release only fires `published` once.
+  # This lets a fixed pipeline ship an existing tag without re-releasing.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to publish, e.g. v0.5.0 (defaults to the current ref)"
+        required: false
 
 jobs:
   publish:
@@ -12,16 +20,47 @@ jobs:
       contents: read
 
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
         with:
-          node-version: 20
+          ref: ${{ inputs.tag || github.ref }}
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
           registry-url: https://registry.npmjs.org
           cache: npm
 
+      # Fail fast, and say why. Both previous releases (v0.3.0, v0.4.0) ran all
+      # the way through `npm pack` and only then died with `npm error ENEEDAUTH`
+      # because this secret was not set — so the releases looked shipped while
+      # npm never received them. Checking first turns that into an obvious error.
+      - name: Verify NPM_TOKEN is configured
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -z "$NODE_AUTH_TOKEN" ]; then
+            echo "::error::NPM_TOKEN secret is not set. Add an npm Automation token with publish rights for the @meshy-ai scope under Settings → Secrets and variables → Actions."
+            exit 1
+          fi
+          echo "NPM_TOKEN is present"
+
+      # Guard against tagging one version and shipping another.
+      - name: Check package.json version matches the release tag
+        if: github.event_name == 'release'
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          PKG_VERSION=$(node -p "require('./package.json').version")
+          if [ "v$PKG_VERSION" != "$TAG" ]; then
+            echo "::error::package.json is $PKG_VERSION but the release tag is $TAG. Bump package.json (and CHANGELOG.md) before publishing."
+            exit 1
+          fi
+          echo "version $PKG_VERSION matches tag $TAG"
+
       - run: npm ci
+      - run: npm run lint
       - run: npm run build
+
       - run: npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
