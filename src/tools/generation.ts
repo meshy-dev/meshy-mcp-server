@@ -36,8 +36,8 @@ This tool creates a new 3D generation task and returns a task_id that can be use
 
 Args:
   - prompt (string): Text description of the 3D model (2-600 characters)
-  - ai_model (enum): AI model - "meshy-5" (previous gen, 5 credits), "meshy-6" (best quality, 20 credits), "latest" (default, resolves to meshy-6). IMPORTANT: Ask the user which model to use before proceeding
-  - model_type (enum, optional): "standard" (default) or "lowpoly". When "lowpoly", ai_model/topology/target_polycount/should_remesh are ignored
+  - ai_model (enum): AI model - "meshy-5" (previous gen, 5 credits), "meshy-6" (best quality, 20 credits), "latest" (default, resolves to meshy-6). NOTE: text-to-3d does NOT accept "meshy-7", and "latest" here is still Meshy 6 (image-to-3d differs). IMPORTANT: Ask the user which model to use before proceeding
+  - model_type (enum, optional): "standard" (default) or "lowpoly" (smart-topology is image-to-3d only). When "lowpoly", ai_model/topology/target_polycount/should_remesh are ignored
   - topology (enum, optional): Mesh topology - "quad" or "triangle"
   - target_polycount (number, optional): Target polygon count (100–300,000)
   - symmetry_mode (enum, optional): "off", "auto" (default), or "on"
@@ -158,11 +158,18 @@ IMAGE INPUT (provide ONE, NEVER both):
   - NEVER manually base64-encode. NEVER use both file_path and image_url.
 
 Other Args:
-  - ai_model: "meshy-5", "meshy-6", or "latest" (default). Ask user which model before proceeding
-  - model_type, pose_mode, topology, target_polycount, should_remesh, symmetry_mode
+  - ai_model: "meshy-5", "meshy-6", "meshy-7", or "latest" (default, resolves to Meshy 7). For part-separated
+    geometry at a fraction of the cost, set model_type:"smart-topology" (ai_model defaults to "meshy-t2",
+    5 credits mesh instead of 20). Ask user which model before proceeding
+  - ultra_mode (boolean, optional): Meshy 7 high-detail geometry pass, +5 credits. Needs ai_model "meshy-7"
+    (or "latest" while it resolves to Meshy 7); rejected on meshy-5/meshy-6 and with lowpoly/smart-topology
+  - model_type: "standard" (default), "smart-topology", or "lowpoly" (deprecated)
+  - pose_mode, topology, target_polycount, should_remesh, symmetry_mode
   - should_texture: Whether to generate textures (default true). Set false for untextured mesh
   - enable_pbr: PBR maps (default false). Set true for metallic/roughness/normal maps
   - texture_prompt, texture_image_url: Guide texturing
+  - texture_resolution: "2k" (default) / "4k" / "8k". 8K costs 15 credits instead of 10 — confirm first.
+    Replaces the deprecated hd_texture flag
   - image_enhancement: Optimize input image (default true, meshy-6/latest only)
   - remove_lighting: Remove highlights/shadows from base color texture (default true, meshy-6/latest only)
   - save_pre_remeshed_model, response_format
@@ -230,13 +237,70 @@ Error Handling:
         if (params.texture_image_url) {
           request.texture_image_url = params.texture_image_url;
         }
-        // hd_texture / image_enhancement / remove_lighting are only accepted for meshy-6/latest;
-        // sending them with meshy-5 makes the API 400. Gate them on the model.
+        // Smart Topology is its own model family: the API rejects
+        // model_type "smart-topology" paired with a standard ai_model.
+        // Omitting ai_model is fine — it defaults to meshy-t2.
+        const isSmartTopologyModel = params.ai_model === "meshy-t1" || params.ai_model === "meshy-t2";
+        if (params.model_type === "smart-topology" && params.ai_model && !isSmartTopologyModel) {
+          return {
+            isError: true,
+            content: [{
+              type: "text",
+              text: `Error: model_type "smart-topology" requires ai_model "meshy-t1" or "meshy-t2" (or omit ai_model to get the meshy-t2 default), but "${params.ai_model}" was given.`
+            }]
+          };
+        }
+        if (isSmartTopologyModel && params.model_type && params.model_type !== "smart-topology") {
+          return {
+            isError: true,
+            content: [{
+              type: "text",
+              text: `Error: ai_model "${params.ai_model}" is a Smart Topology model and requires model_type "smart-topology", but "${params.model_type}" was given.`
+            }]
+          };
+        }
+
+        // ultra_mode is a Meshy-7-only knob: the API 400s when the resolved model
+        // is not Meshy 7, and rejects it outright alongside model_type "lowpoly".
+        // Catch the unambiguous mistakes here so the user is not charged a
+        // round-trip for a request that cannot succeed.
+        if (params.ultra_mode) {
+          if (params.ai_model && params.ai_model !== "meshy-7" && params.ai_model !== "latest") {
+            return {
+              isError: true,
+              content: [{
+                type: "text",
+                text: `Error: ultra_mode is only supported for meshy-7, but ai_model is "${params.ai_model}". Set ai_model to "meshy-7" (recommended, +5 credits on top of the 20-credit mesh), or drop ultra_mode.`
+              }]
+            };
+          }
+          if (params.model_type === "lowpoly" || params.model_type === "smart-topology") {
+            return {
+              isError: true,
+              content: [{
+                type: "text",
+                text: `Error: ultra_mode requires standard Meshy 7 generation and cannot be combined with model_type "${params.model_type}".`
+              }]
+            };
+          }
+          request.ultra_mode = true;
+        }
+
+        // texture_resolution (and the deprecated hd_texture) need an HD-capable
+        // model — everything except meshy-5. image_enhancement / remove_lighting
+        // stay on the narrower meshy-6/latest lane: sending them with meshy-5
+        // makes the API 400, and Meshy 7 silently ignores remove_lighting.
+        const isHDCapableImage = params.ai_model !== "meshy-5";
         const isMeshy6Image = params.ai_model === "meshy-6" || params.ai_model === "latest" || !params.ai_model;
-        if (isMeshy6Image) {
+        if (isHDCapableImage) {
+          if (params.texture_resolution !== undefined) {
+            request.texture_resolution = params.texture_resolution;
+          }
           if (params.hd_texture !== undefined) {
             request.hd_texture = params.hd_texture;
           }
+        }
+        if (isMeshy6Image) {
           if (params.image_enhancement !== undefined) {
             request.image_enhancement = params.image_enhancement;
           }
@@ -351,9 +415,14 @@ Examples:
         if (params.texture_image_url) {
           request.texture_image_url = params.texture_image_url;
         }
-        // hd_texture / remove_lighting are meshy-6/latest-only; sending with meshy-5 makes the API 400.
+        // texture_resolution / hd_texture / remove_lighting are meshy-6/latest-only
+        // here; sending them with meshy-5 makes the API 400. Note texture_resolution
+        // applies to text-to-3d REFINE only — the preview stage produces no texture.
         const isMeshy6Refine = params.ai_model === "meshy-6" || params.ai_model === "latest" || !params.ai_model;
         if (isMeshy6Refine) {
+          if (params.texture_resolution !== undefined) {
+            request.texture_resolution = params.texture_resolution;
+          }
           if (params.hd_texture !== undefined) {
             request.hd_texture = params.hd_texture;
           }
@@ -414,11 +483,14 @@ Image Input (provide ONE of these):
 IMPORTANT: For local files, always use file_paths instead of manually base64-encoding.
 
 Other Args:
-  - ai_model: "meshy-5", "meshy-6", or "latest" (default). Ask user which model before proceeding
-  - model_type, pose_mode, topology, target_polycount, should_remesh, symmetry_mode
+  - ai_model: "meshy-5", "meshy-6", "meshy-7", or "latest" (default, resolves to Meshy 7). NOTE: smart-topology
+    (meshy-t1/meshy-t2) and ultra_mode are single-image-only and NOT available here. Ask user which model first
+  - model_type: "standard" or "lowpoly", pose_mode, topology, target_polycount, should_remesh, symmetry_mode
   - should_texture: Whether to generate textures (default true)
   - enable_pbr: PBR maps (default false)
   - texture_prompt, texture_image_url: Guide texturing
+  - texture_resolution: "2k" (default) / "4k" / "8k". 8K costs 15 credits instead of 10 — confirm first.
+    Replaces the deprecated hd_texture flag
   - image_enhancement: Optimize input images (default true, meshy-6/latest only)
   - remove_lighting: Remove highlights/shadows from base color texture (default true, meshy-6/latest only)
   - save_pre_remeshed_model, response_format
@@ -472,10 +544,16 @@ Error Handling:
         if (params.should_texture !== undefined) request.should_texture = params.should_texture;
         if (params.texture_prompt) request.texture_prompt = params.texture_prompt;
         if (params.texture_image_url) request.texture_image_url = params.texture_image_url;
-        // meshy-6/latest-only texture params; sending them with meshy-5 makes the API 400.
+        // texture_resolution / hd_texture need an HD-capable model (anything but
+        // meshy-5). image_enhancement / remove_lighting stay meshy-6/latest-only;
+        // sending them with meshy-5 makes the API 400.
+        const isHDCapableMulti = params.ai_model !== "meshy-5";
         const isMeshy6Multi = params.ai_model === "meshy-6" || params.ai_model === "latest" || !params.ai_model;
-        if (isMeshy6Multi) {
+        if (isHDCapableMulti) {
+          if (params.texture_resolution !== undefined) request.texture_resolution = params.texture_resolution;
           if (params.hd_texture !== undefined) request.hd_texture = params.hd_texture;
+        }
+        if (isMeshy6Multi) {
           if (params.image_enhancement !== undefined) request.image_enhancement = params.image_enhancement;
           if (params.remove_lighting !== undefined) request.remove_lighting = params.remove_lighting;
         }

@@ -1,5 +1,48 @@
 # Changelog
 
+## [0.5.0] - 2026-08-11
+
+Sync with everything the public Meshy API shipped between 2026-06-24 and 2026-08-11.
+Every claim below was checked against the API source and the public changelog, and the
+parameter contracts were verified against production with zero-credit 400 probes.
+
+### Added
+
+- **Meshy 7** — `ai_model: "meshy-7"` on `meshy_image_to_3d`, `meshy_multi_image_to_3d` and `meshy_retexture`
+  - `latest` now resolves to **Meshy 7** on those three endpoints
+  - ⚠️ `meshy_text_to_3d` / `_refine` do **NOT** accept `meshy-7`, and their `latest` still resolves to Meshy 6. The schemas encode the two model sets separately so an agent cannot send `meshy-7` to text-to-3d
+- **`ultra_mode`** on `meshy_image_to_3d` — Meshy 7 stage-3 high-detail pass, **+5 credits**
+  - Single-image only; rejected with 400 on `meshy-5` / `meshy-6`, and cannot be combined with `lowpoly` or `smart-topology`. The tool blocks these combinations locally so the round-trip is not wasted
+- **Smart Topology** — `model_type: "smart-topology"` on `meshy_image_to_3d`, with new models `meshy-t2` (default) and `meshy-t1`
+  - Native part separation and configurable `target_polycount` at **5 credits of mesh instead of 20**
+  - Omitting `ai_model` under smart-topology yields `meshy-t2`; pairing it with a standard model (or vice versa) is rejected locally with a named-field error
+- **`texture_resolution`** (`"2k"` | `"4k"` | `"8k"`, default `2k`) on `meshy_image_to_3d`, `meshy_multi_image_to_3d`, `meshy_text_to_3d_refine` and `meshy_retexture`
+  - 8K costs **15 credits** instead of 10; tool descriptions tell the agent to confirm before selecting it
+  - Applies to text-to-3d **refine only** — the preview stage produces no texture
+- **`multiview_image_urls`** on `meshy_retexture` — 1–4 ordered views OF THE SAME OBJECT (element 0 is the primary reference and alone drives metallic/roughness prediction)
+  - Requires `meshy-7` / `latest`, and is mutually exclusive with `text_style_prompt` and `image_style_url`. All three combinations are validated locally
+- **3 new Creative Lab products** — `vinyl-figure`, `brick-figure` and `keycap`, bringing `meshy_creative_lab` to all **7** OpenAPI products
+  - `keycap` costs **62 credits (12 + 50)**, not 36, and is the only product whose build stage needs a `candidate_id`: the tool now reads `candidate_ids[0]` off the succeeded prototype and forwards it automatically
+  - New keycap-only args `head_size_mm` (10–40, default 23 — scales the head's longest edge, NOT its height) and `base_model` (`cherry-mx-1x1-r1`)
+  - New task types + endpoint/list routing for all six new (product, stage) pairs
+- New `SmartTopologyModel` and `TextureResolution` enums; `KEYCAP_BASE_MODEL`, `TEXTURE_CREDITS`, `TEXTURE_8K_CREDITS`, `ULTRA_MODE_SURCHARGE_CREDITS`, `CREATIVE_LAB_KEYCAP_*_CREDITS` constants and a `creativeLabCredits(product)` helper
+
+### Changed
+
+- **`hd_texture` is now marked DEPRECATED** across all four endpoints that carried it — the API superseded it with `texture_resolution` (`hd_texture: true` is exactly `texture_resolution: "4k"`). It is still sent when set, so existing callers keep working
+- **`meshy_repair_printability`** now documents `.fbx` / `.gltf` input in addition to `.glb` / `.stl` / `.obj`. `.fbx` and `.gltf` are decoded and returned as repaired **GLB**, and `.fbx` must be an https URL — it cannot be passed as a `data:` URI
+- **Model gating reworked**: `texture_resolution` / `hd_texture` now ride an "HD-capable" check (anything but `meshy-5`) instead of the old meshy-6-only check, so Meshy 7 and Smart Topology tasks can carry them. `image_enhancement` / `remove_lighting` stay on the narrower meshy-6/`latest` lane
+- **`meshy_creative_lab`**: `text` input is now correctly restricted to `lamp` — the other six products are image-only and previously produced an opaque API 400
+- `model_type: "lowpoly"` is described as deprecated in favour of `smart-topology`, matching the API docs
+- `instructions.ts`: per-model cost table for image-to-3d, updated Creative Lab scenario (7 products, keycap pricing), reworked retexture scenario (three mutually exclusive style inputs), and a new scenario for cheap part-separated geometry via Smart Topology
+
+### Notes
+
+Deliberately **not** exposed, because they are not publicly available: the gated
+`/openapi/v2` unified task endpoints, v2-only retexture `uv_mode`, the OAuth
+device-authorization endpoints (those belong to the CLI, not MCP), and the
+undocumented `nano-banana-2-lite` image model.
+
 ## [0.4.0] - 2026-06-24
 
 ### Added

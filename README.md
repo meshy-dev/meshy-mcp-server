@@ -9,7 +9,7 @@
 | Category | Tools |
 |----------|-------|
 | **3D Generation** | `meshy_text_to_3d`, `meshy_text_to_3d_refine`, `meshy_image_to_3d`, `meshy_multi_image_to_3d` |
-| **Creative Lab** | `meshy_creative_lab` |
+| **Creative Lab** | `meshy_creative_lab` (7 products) |
 | **Post-Processing** | `meshy_remesh`, `meshy_retexture`, `meshy_rig`, `meshy_animate` |
 | **Conversion** | `meshy_convert`, `meshy_resize`, `meshy_uv_unwrap` |
 | **Image Generation** | `meshy_text_to_image`, `meshy_image_to_image` |
@@ -22,17 +22,43 @@
 
 - **Text to 3D**: Generate 3D models from text descriptions (preview + refine pipeline)
 - **Image to 3D**: Convert single or multiple images into 3D models
+- **Meshy 7 + Ultra (v0.5.0)**: `ai_model: "meshy-7"` on image-to-3d, multi-image-to-3d and retexture, plus `ultra_mode` for an extra high-detail geometry pass (+5 credits, single-image only)
+- **Smart Topology (v0.5.0)**: `model_type: "smart-topology"` (models `meshy-t2` / `meshy-t1`) produces part-separated geometry with a configurable polycount for **5 credits of mesh instead of 20**
+- **8K Textures (v0.5.0)**: `texture_resolution: "2k" | "4k" | "8k"` on image-to-3d, multi-image-to-3d, text-to-3d refine and retexture (8K costs 15 credits vs 10). Replaces the now-deprecated `hd_texture` flag
+- **Multi-view Retexture (v0.5.0)**: `multiview_image_urls` — 1–4 ordered views of the *same object* drive the texture instead of a single style reference (requires Meshy 7)
 - **Auto-Rigging & Animation**: Add skeletons and animations to humanoid characters
-- **Creative Lab (v0.4.0)**: One tool — a photo or a line of text → a finished, print-ready product (figure / lamp / keychain / fridge-magnet). Runs prototype→build end-to-end and returns only the final 3D model
-- **Format & Size Utilities (v0.4.0)**: `convert` (format conversion incl. 3MF, 1 credit), `resize` (real-world dimensions, 1 credit), `uv_unwrap` (clean UV layout for external texturing, 5 credits)
-- **2D Image Models (v0.4.0)**: `text_to_image` / `image_to_image` now include `nano-banana-2` and `gpt-image-2`
-- **3D Printability Suite (v0.3.0)**:
+- **Creative Lab**: One tool — a photo or a line of text → a finished, print-ready product. **7 products (v0.5.0)**: figure, lamp, keychain, fridge-magnet, vinyl-figure, brick-figure and keycap. Runs prototype→build end-to-end and returns only the final 3D model
+- **Format & Size Utilities**: `convert` (format conversion incl. 3MF, 1 credit), `resize` (real-world dimensions, 1 credit), `uv_unwrap` (clean UV layout for external texturing, 5 credits)
+- **2D Image Models**: `text_to_image` / `image_to_image` support `nano-banana`, `nano-banana-2`, `nano-banana-pro` and `gpt-image-2`
+- **3D Printability Suite**:
   - `analyze_printability` — free FDM check (watertight, volume, holes, non-manifold edges, degenerate faces)
-  - `repair_printability` — 10-credit topology repair (output format mirrors input)
+  - `repair_printability` — 10-credit topology repair, now also accepting **.fbx / .gltf** input (v0.5.0)
   - `process_multicolor` — 10-credit multi-color 3MF for AMS/MMU printers
 - **Slicer Integration**: Auto-detect 7 installed slicers (OrcaSlicer, Bambu, Creality, Elegoo, Anycubic, PrusaSlicer, Cura) and return launch commands the agent can execute
 - **Smart File Organization**: Auto-saves to `meshy_output/` with project folders, metadata, and history tracking
 - **Built-in Workflow Intelligence**: Server instructions guide the agent through correct tool chains for each use case
+
+### Models & Credits
+
+`ai_model` is **not** the same set on every endpoint, and `latest` does not resolve to the same model everywhere:
+
+| Endpoint | Accepted `ai_model` | `latest` resolves to |
+|---|---|---|
+| `meshy_image_to_3d` | `meshy-5`, `meshy-6`, `meshy-7`, `latest` — plus `meshy-t1` / `meshy-t2` with `model_type: "smart-topology"` | Meshy 7 |
+| `meshy_multi_image_to_3d` | `meshy-5`, `meshy-6`, `meshy-7`, `latest` | Meshy 7 |
+| `meshy_retexture` | `meshy-5`, `meshy-6`, `meshy-7`, `latest` | Meshy 7 |
+| `meshy_text_to_3d` / `_refine` | `meshy-5`, `meshy-6`, `latest` — **no `meshy-7`** | Meshy 6 |
+
+Image-to-3D cost by model:
+
+| `ai_model` | Mesh only | + texture | + 8K texture |
+|---|---|---|---|
+| `meshy-7` / `latest` | 20 | 30 | 35 |
+| `meshy-6` | 20 | 30 | 35 |
+| `meshy-t2` (smart-topology) | 5 | 15 | 20 |
+| `meshy-5` | 5 | 15 | — |
+
+`ultra_mode: true` adds **+5** credits. Creative Lab is **36** credits (6 + 30) for every product except **keycap, which is 62** (12 + 50). Other tools: remesh 5, rig 5, animate 3, convert 1, resize 1, uv-unwrap 5, analyze-printability free, repair-printability 10, multicolor 10.
 
 ## Prerequisites
 
