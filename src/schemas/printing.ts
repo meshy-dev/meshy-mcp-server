@@ -58,7 +58,7 @@ export const RepairPrintabilityInputSchema = z.object({
   input_task_id: TaskIdSchema.optional()
     .describe("ID of a SUCCEEDED upstream task with a GLB asset. Output will be GLB. Mutually exclusive with model_url."),
   model_url: UrlSchema.optional()
-    .describe("Public URL of a 3D model to repair (.glb / .stl / .obj, max 100 MB). Output format matches input. Mutually exclusive with input_task_id."),
+    .describe("Public URL of a 3D model to repair (.glb / .stl / .obj / .fbx / .gltf, max 100 MB). Output mirrors the input format for .glb/.stl/.obj; .fbx and .gltf are decoded and returned as repaired GLB. .fbx must be an https URL — it cannot be passed as a data: URI. Mutually exclusive with input_task_id."),
   response_format: ResponseFormatSchema
 }).strict();
 

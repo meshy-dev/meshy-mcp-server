@@ -45,16 +45,42 @@ export enum ModelFormat {
 }
 
 // AI Models
+//
+// IMPORTANT — the accepted set differs PER ENDPOINT, so do not assume one enum
+// covers everything (verified against the API 2026-08-11):
+//   image-to-3d / multi-image-to-3d / retexture → meshy-5, meshy-6, meshy-7, latest
+//   text-to-3d (v2)                             → meshy-5, meshy-6, latest  (NO meshy-7)
+// `latest` also resolves differently: it is Meshy 7 on image-to-3d /
+// multi-image-to-3d / retexture, but still Meshy 6 on text-to-3d.
 export enum AIModel {
   MESHY_5 = "meshy-5",
   MESHY_6 = "meshy-6",
+  MESHY_7 = "meshy-7",
   LATEST = "latest"
 }
 
+// Smart Topology models — selected via model_type: "smart-topology" on
+// image-to-3d. meshy-t2 is the default and adds native part separation with a
+// configurable target_polycount; meshy-t1 is the previous generation.
+export enum SmartTopologyModel {
+  MESHY_T1 = "meshy-t1",
+  MESHY_T2 = "meshy-t2"
+}
+
 // Model Types
+// 'lowpoly' is deprecated by the API in favour of 'smart-topology'.
 export enum ModelType {
   STANDARD = "standard",
+  SMART_TOPOLOGY = "smart-topology",
   LOWPOLY = "lowpoly"
+}
+
+// Texture Resolution (replaces the deprecated hd_texture boolean).
+// hd_texture: true is exactly equivalent to texture_resolution: "4k".
+export enum TextureResolution {
+  TWO_K = "2k",
+  FOUR_K = "4k",
+  EIGHT_K = "8k"
 }
 
 // Symmetry Modes
@@ -104,16 +130,28 @@ export enum TaskType {
   CREATIVE_LAB_KEYCHAIN_PROTOTYPE = "creative-lab-keychain-prototype",
   CREATIVE_LAB_KEYCHAIN_BUILD = "creative-lab-keychain-build",
   CREATIVE_LAB_FRIDGE_MAGNET_PROTOTYPE = "creative-lab-fridge-magnet-prototype",
-  CREATIVE_LAB_FRIDGE_MAGNET_BUILD = "creative-lab-fridge-magnet-build"
+  CREATIVE_LAB_FRIDGE_MAGNET_BUILD = "creative-lab-fridge-magnet-build",
+  CREATIVE_LAB_VINYL_FIGURE_PROTOTYPE = "creative-lab-vinyl-figure-prototype",
+  CREATIVE_LAB_VINYL_FIGURE_BUILD = "creative-lab-vinyl-figure-build",
+  CREATIVE_LAB_BRICK_FIGURE_PROTOTYPE = "creative-lab-brick-figure-prototype",
+  CREATIVE_LAB_BRICK_FIGURE_BUILD = "creative-lab-brick-figure-build",
+  CREATIVE_LAB_KEYCAP_PROTOTYPE = "creative-lab-keycap-prototype",
+  CREATIVE_LAB_KEYCAP_BUILD = "creative-lab-keycap-build"
 }
 
-// Creative Lab products exposed through the OpenAPI (4 of them; the webapp has more).
+// Creative Lab products exposed through the OpenAPI (7 of them; the webapp has more).
 export enum CreativeLabProduct {
   FIGURE = "figure",
   LAMP = "lamp",
   KEYCHAIN = "keychain",
-  FRIDGE_MAGNET = "fridge-magnet"
+  FRIDGE_MAGNET = "fridge-magnet",
+  VINYL_FIGURE = "vinyl-figure",
+  BRICK_FIGURE = "brick-figure",
+  KEYCAP = "keycap"
 }
+
+// Keycap base model — the only value the build stage accepts today (Cherry MX 1u).
+export const KEYCAP_BASE_MODEL = "cherry-mx-1x1-r1";
 
 // Remesh Output Formats
 export enum RemeshFormat {
@@ -198,9 +236,31 @@ export const CONVERT_CREDITS = 1;
 export const RESIZE_CREDITS = 1;
 export const UV_UNWRAP_CREDITS = 5;
 
-// Creative Lab credit costs (per product, same across all 4 products)
+// Creative Lab credit costs. Six of the seven products share 6 + 30 = 36.
+// Keycap is the exception: its prototype renders two images per candidate
+// (12 credits) and its build carries the base-plate generation (50) → 62 total.
 export const CREATIVE_LAB_PROTOTYPE_CREDITS = 6;
 export const CREATIVE_LAB_BUILD_CREDITS = 30;
+export const CREATIVE_LAB_KEYCAP_PROTOTYPE_CREDITS = 12;
+export const CREATIVE_LAB_KEYCAP_BUILD_CREDITS = 50;
+
+/** Per-product (prototype, build) credit cost. */
+export function creativeLabCredits(product: CreativeLabProduct): { prototype: number; build: number; total: number } {
+  const prototype = product === CreativeLabProduct.KEYCAP
+    ? CREATIVE_LAB_KEYCAP_PROTOTYPE_CREDITS
+    : CREATIVE_LAB_PROTOTYPE_CREDITS;
+  const build = product === CreativeLabProduct.KEYCAP
+    ? CREATIVE_LAB_KEYCAP_BUILD_CREDITS
+    : CREATIVE_LAB_BUILD_CREDITS;
+  return { prototype, build, total: prototype + build };
+}
+
+// Texture credit costs — 8K is a premium tier, 2K/4K are flat.
+export const TEXTURE_CREDITS = 10;
+export const TEXTURE_8K_CREDITS = 15;
+
+// Meshy 7 `ultra_mode` stage-3 surcharge (single image-to-3d only).
+export const ULTRA_MODE_SURCHARGE_CREDITS = 5;
 
 // UV Unwrap face-count ceiling (oversized meshes are rejected with a 400 — remesh first)
 export const UV_UNWRAP_MAX_FACES = 40000;

@@ -58,6 +58,7 @@ export interface ImageTo3DApiRequest {
   enable_pbr: boolean;
   moderation: boolean;
   ai_model?: string;
+  ultra_mode?: boolean;
   model_type?: string;
   pose_mode?: string;
   topology?: string;
@@ -67,6 +68,7 @@ export interface ImageTo3DApiRequest {
   should_texture?: boolean;
   texture_prompt?: string;
   texture_image_url?: string;
+  texture_resolution?: string;
   hd_texture?: boolean;
   image_enhancement?: boolean;
   remove_lighting?: boolean;
@@ -87,6 +89,7 @@ export interface TextTo3DRefineApiRequest {
   ai_model: string;
   texture_prompt?: string;
   texture_image_url?: string;
+  texture_resolution?: string;
   hd_texture?: boolean;
   remove_lighting?: boolean;
   target_formats?: string[];
@@ -111,6 +114,7 @@ export interface MultiImageTo3DApiRequest {
   should_texture?: boolean;
   texture_prompt?: string;
   texture_image_url?: string;
+  texture_resolution?: string;
   hd_texture?: boolean;
   image_enhancement?: boolean;
   remove_lighting?: boolean;
@@ -146,7 +150,9 @@ export interface RetextureApiRequest {
   model_url?: string;
   text_style_prompt?: string;
   image_style_url?: string;
+  multiview_image_urls?: string[];
   ai_model?: string;
+  texture_resolution?: string;
   hd_texture?: boolean;
   remove_lighting?: boolean;
   target_formats?: string[];
@@ -188,6 +194,13 @@ export interface CreativeLabPrototypeApiRequest {
 export interface CreativeLabBuildApiRequest {
   input_task_id: string;
   name?: string;
+  // Keycap only: the build stage picks one of the prototype's candidates and
+  // accepts an options object. Every other product ignores these.
+  candidate_id?: string;
+  options?: {
+    base_model?: string;
+    head_size_mm?: number;
+  };
 }
 
 // Rig API request body

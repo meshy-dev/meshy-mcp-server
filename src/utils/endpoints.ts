@@ -28,7 +28,13 @@ const TASK_ENDPOINTS: Record<TaskType, string> = {
   [TaskType.CREATIVE_LAB_KEYCHAIN_PROTOTYPE]: "/openapi/creative-lab/keychain/v1/prototype",
   [TaskType.CREATIVE_LAB_KEYCHAIN_BUILD]: "/openapi/creative-lab/keychain/v1/build",
   [TaskType.CREATIVE_LAB_FRIDGE_MAGNET_PROTOTYPE]: "/openapi/creative-lab/fridge-magnet/v1/prototype",
-  [TaskType.CREATIVE_LAB_FRIDGE_MAGNET_BUILD]: "/openapi/creative-lab/fridge-magnet/v1/build"
+  [TaskType.CREATIVE_LAB_FRIDGE_MAGNET_BUILD]: "/openapi/creative-lab/fridge-magnet/v1/build",
+  [TaskType.CREATIVE_LAB_VINYL_FIGURE_PROTOTYPE]: "/openapi/creative-lab/vinyl-figure/v1/prototype",
+  [TaskType.CREATIVE_LAB_VINYL_FIGURE_BUILD]: "/openapi/creative-lab/vinyl-figure/v1/build",
+  [TaskType.CREATIVE_LAB_BRICK_FIGURE_PROTOTYPE]: "/openapi/creative-lab/brick-figure/v1/prototype",
+  [TaskType.CREATIVE_LAB_BRICK_FIGURE_BUILD]: "/openapi/creative-lab/brick-figure/v1/build",
+  [TaskType.CREATIVE_LAB_KEYCAP_PROTOTYPE]: "/openapi/creative-lab/keycap/v1/prototype",
+  [TaskType.CREATIVE_LAB_KEYCAP_BUILD]: "/openapi/creative-lab/keycap/v1/build"
 };
 
 /**
@@ -60,7 +66,13 @@ export const LIST_CAPABLE_TASK_TYPES: TaskType[] = [
   TaskType.CREATIVE_LAB_KEYCHAIN_PROTOTYPE,
   TaskType.CREATIVE_LAB_KEYCHAIN_BUILD,
   TaskType.CREATIVE_LAB_FRIDGE_MAGNET_PROTOTYPE,
-  TaskType.CREATIVE_LAB_FRIDGE_MAGNET_BUILD
+  TaskType.CREATIVE_LAB_FRIDGE_MAGNET_BUILD,
+  TaskType.CREATIVE_LAB_VINYL_FIGURE_PROTOTYPE,
+  TaskType.CREATIVE_LAB_VINYL_FIGURE_BUILD,
+  TaskType.CREATIVE_LAB_BRICK_FIGURE_PROTOTYPE,
+  TaskType.CREATIVE_LAB_BRICK_FIGURE_BUILD,
+  TaskType.CREATIVE_LAB_KEYCAP_PROTOTYPE,
+  TaskType.CREATIVE_LAB_KEYCAP_BUILD
 ];
 
 /**

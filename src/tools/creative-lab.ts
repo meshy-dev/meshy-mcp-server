@@ -18,6 +18,9 @@ import { CreativeLabInputSchema } from "../schemas/creative-lab.js";
 import {
   ResponseFormat,
   TaskStatus,
+  CreativeLabProduct,
+  creativeLabCredits,
+  CREATIVE_LAB_KEYCAP_PROTOTYPE_CREDITS,
   POLL_INITIAL_DELAY,
   POLL_MAX_DELAY,
   POLL_BACKOFF_FACTOR,
@@ -85,24 +88,29 @@ export function registerCreativeLabTools(server: McpServer, client: MeshyClient)
     "meshy_creative_lab",
     {
       title: "Creative Lab — Make a Product (end-to-end)",
-      description: `Turn a source photo (or text prompt) into a finished Creative Lab product 3D model. Cost: 36 credits total.
+      description: `Turn a source photo (or text prompt) into a finished Creative Lab product 3D model.
 
-Products: "figure" (chibi collectible), "lamp" (3D-printable lampshade), "keychain", "fridge-magnet".
+Products and cost:
+  - "figure" (chibi collectible), "lamp" (3D-printable lampshade), "keychain", "fridge-magnet",
+    "vinyl-figure" (vinyl-toy style), "brick-figure" (brick-minifigure style) → 36 credits (6 + 30)
+  - "keycap" (Cherry MX 1u keycap) → 62 credits (12 + 50)
 
-This runs the full two-stage Meshy pipeline internally — concept prototype (6cr) then 3D build (30cr) — and returns ONLY the final 3D model. The intermediate concept image is internal and is never surfaced. One call does everything; it blocks while both stages run (typically 2–5 minutes) and reports progress.
+This runs the full two-stage Meshy pipeline internally — concept prototype then 3D build — and returns ONLY the final 3D model. The intermediate concept image is internal and is never surfaced. One call does everything; it blocks while both stages run (typically 2–5 minutes) and reports progress.
 
-IMPORTANT: confirm the 36-credit cost with the user before calling.
+IMPORTANT: confirm the credit cost with the user before calling — and note keycap costs 62, not 36.
 
 INPUT — provide ONE source:
   - Local image → file_path: "/absolute/path/photo.jpg" (.jpg/.jpeg/.png/.webp)
   - Remote image → image_url: "https://example.com/photo.jpg" (or data URI)
-  - Text prompt → text: "..."  (only some products support text-to-3D, e.g. lamp; figure/keychain/fridge-magnet are image-only)
+  - Text prompt → text: "..."  (ONLY "lamp" accepts text; every other product is image-only)
 
 Args:
-  - product (enum, REQUIRED): "figure" | "lamp" | "keychain" | "fridge-magnet"
+  - product (enum, REQUIRED): "figure" | "lamp" | "keychain" | "fridge-magnet" | "vinyl-figure" | "brick-figure" | "keycap"
   - image_url / file_path (string, optional): image source
-  - text (string, optional): text prompt instead of an image (lamp etc.; ≤800 chars)
-  - image_subject (enum, optional): "character" | "landscape" — for image input on products that support it (e.g. lamp)
+  - text (string, optional): text prompt instead of an image (lamp only; ≤800 chars)
+  - image_subject (enum, optional): "character" | "landscape" — lamp only
+  - head_size_mm (number, optional): keycap only — head longest edge in mm (10–40, default 23)
+  - base_model (string, optional): keycap only — "cherry-mx-1x1-r1" (the only profile today)
   - name (string, optional): display name (≤100 chars)
   - timeout_seconds (number): max wait per stage (default 300, max 600)
   - response_format (enum): "markdown" or "json" (default: "markdown")
@@ -114,8 +122,9 @@ To multicolor-print the result: a Creative Lab model can only be sent to meshy_p
 Examples:
   - { product: "figure", file_path: "/Users/me/portrait.jpg" }
   - { product: "lamp", text: "a stylized owl on a branch under moonlight" }
+  - { product: "keycap", file_path: "/Users/me/cat.jpg", head_size_mm: 25 }
 
-If the prototype stage fails, the build is NOT started (only the 6-credit prototype is charged).`,
+If the prototype stage fails, the build is NOT started (only the prototype is charged).`,
       inputSchema: CreativeLabInputSchema,
       annotations: {
         readOnlyHint: false,
@@ -135,6 +144,20 @@ If the prototype stage fails, the build is NOT started (only the 6-credit protot
         }
 
         const product = params.product;
+
+        // Lamp is the only product whose prototype accepts a text prompt; the
+        // rest require image_url and 400 without it.
+        if (params.text && !hasImage && product !== CreativeLabProduct.LAMP) {
+          return {
+            isError: true,
+            content: [{
+              type: "text",
+              text: `Error: the "${product}" product is image-only — provide image_url or file_path. Only "lamp" accepts a text prompt.`
+            }]
+          };
+        }
+
+        const credits = creativeLabCredits(product);
         const protoBase = `/openapi/creative-lab/${product}/v1/prototype`;
         const buildBase = `/openapi/creative-lab/${product}/v1/build`;
         const timeoutMs = params.timeout_seconds * 1000;
@@ -192,7 +215,7 @@ If the prototype stage fails, the build is NOT started (only the 6-credit protot
             isError: true,
             content: [{
               type: "text",
-              text: `Error: Creative Lab ${product} prototype ${reason}. The build stage was NOT started, so only the 6-credit prototype was charged. Prototype task_id: ${protoId}.`
+              text: `Error: Creative Lab ${product} prototype ${reason}. The build stage was NOT started, so only the ${credits.prototype}-credit prototype was charged. Prototype task_id: ${protoId}.`
             }]
           };
         }
@@ -200,6 +223,28 @@ If the prototype stage fails, the build is NOT started (only the 6-credit protot
         // ── Stage 2: build ──────────────────────────────────────────────
         const buildReq: CreativeLabBuildApiRequest = { input_task_id: protoId };
         if (params.name) buildReq.name = params.name;
+
+        // Keycap is the one product whose build is not input_task_id-only: it
+        // requires candidate_id, picked from the candidate_ids the prototype
+        // returns, and accepts an options object. Every other product 400s on
+        // these fields, so they are keycap-scoped.
+        if (product === CreativeLabProduct.KEYCAP) {
+          const candidateId = (proto as unknown as { candidate_ids?: string[] }).candidate_ids?.[0];
+          if (!candidateId) {
+            return {
+              isError: true,
+              content: [{
+                type: "text",
+                text: `Error: the keycap prototype (task_id ${protoId}) succeeded but returned no candidate_ids, so the build cannot be started. Only the ${CREATIVE_LAB_KEYCAP_PROTOTYPE_CREDITS}-credit prototype was charged.`
+              }]
+            };
+          }
+          buildReq.candidate_id = candidateId;
+          const options: { base_model?: string; head_size_mm?: number } = {};
+          if (params.base_model) options.base_model = params.base_model;
+          if (params.head_size_mm !== undefined) options.head_size_mm = params.head_size_mm;
+          if (Object.keys(options).length > 0) buildReq.options = options;
+        }
 
         const buildResp = await client.post<CreateTaskApiResponse>(
           buildBase,

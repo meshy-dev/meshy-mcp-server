@@ -12,19 +12,32 @@ Before calling ANY tool that costs credits, present the cost and wait for user c
 
 | Tool | Credits |
 |------|---------|
-| meshy_text_to_3d | 5–20 |
-| meshy_text_to_3d_refine | 10 |
-| meshy_image_to_3d / meshy_multi_image_to_3d | 5–30 |
-| meshy_retexture | 10 |
+| meshy_text_to_3d | 5–20 (meshy-6/latest & lowpoly 20, meshy-5 5) |
+| meshy_text_to_3d_refine | 10 (15 with texture_resolution "8k") |
+| meshy_image_to_3d / meshy_multi_image_to_3d | 5–35 — see the model table below |
+| meshy_retexture | 10 (15 with texture_resolution "8k") |
 | meshy_remesh | 5 |
 | meshy_rig | 5 (includes walking + running) |
 | meshy_animate | 3 |
+| meshy_analyze_printability | 0 (free) |
+| meshy_repair_printability | 10 |
 | meshy_process_multicolor | 10 |
 | meshy_convert | 1 |
 | meshy_resize | 1 |
 | meshy_uv_unwrap | 5 |
-| meshy_creative_lab | 36 (prototype 6 + build 30, run end-to-end) |
+| meshy_creative_lab | 36 (6 + 30) — EXCEPT keycap, which is 62 (12 + 50) |
 | meshy_text_to_image / meshy_image_to_image | nano-banana 3 / nano-banana-2 6 / nano-banana-pro 9 / gpt-image-2: text 9, image 12 |
+
+### image-to-3d cost by model
+| ai_model | mesh only | + texture | + 8K texture |
+|---|---|---|---|
+| meshy-7 / latest | 20 | 30 | 35 |
+| meshy-6 | 20 | 30 | 35 |
+| meshy-t2 (model_type "smart-topology") | 5 | 15 | 20 |
+| meshy-5 | 5 | 15 | — (no HD texture) |
+
+ultra_mode: true adds **+5** on top (meshy-7 only, single-image only).
+texture_resolution: "8k" costs 15 instead of 10 for the texture stage — always confirm it explicitly.
 
 ## Rule 2: Determine Output Format BEFORE Generating
 The API parameter target_formats controls which formats are produced. Decide the output format before calling any generation tool, because target_formats must be set at creation time. Ask user about their intended use first.
@@ -82,7 +95,10 @@ Suggested flow:
 ## Scenario F: Retexture
 Trigger: user wants to change textures/style of existing model.
 Suggested flow:
-1. Ask user for text_style_prompt OR image_style_url (one required, image takes precedence)
+1. Ask the user for EXACTLY ONE style input — they are mutually exclusive:
+   - text_style_prompt (a description of the style), or
+   - image_style_url (one image used as a STYLE reference), or
+   - multiview_image_urls (1–4 photos OF THE SAME OBJECT from different angles; needs ai_model "meshy-7"/"latest")
 2. Apply retexture (meshy_retexture)
 
 ## Scenario H: Cheap Format Conversion / Resize
@@ -99,12 +115,18 @@ Suggested flow:
 2. meshy_uv_unwrap (5 credits) with input_task_id or model_url.
 3. Wait for completion (task_type "uv-unwrap"), then meshy_download_model (format "glb"). The output is a single GLB with fresh UVs and a placeholder material.
 
-## Scenario J: Creative Lab Consumer Products (figure / keychain / fridge-magnet / lamp)
-Trigger: user wants a stylized physical-product model — chibi figure, keychain, fridge magnet, or lamp — from a photo (or, for lamp, a text prompt).
+## Scenario J: Creative Lab Consumer Products (7 products)
+Trigger: user wants a stylized physical-product model from a photo — chibi figure, vinyl figure, brick minifigure, keychain, fridge magnet, keycap, or lamp (lamp also accepts a text prompt).
 Suggested flow:
-1. Confirm the 36-credit cost with the user.
-2. Call meshy_creative_lab once with product + a source (file_path / image_url, or text for lamp). It runs the full prototype→build pipeline internally and returns the final 3D model — the intermediate concept image is internal and is NOT shown to the user.
+1. Confirm the cost: 36 credits for figure / vinyl-figure / brick-figure / keychain / fridge-magnet / lamp, but **62 for keycap**.
+2. Call meshy_creative_lab once with product + a source (file_path / image_url; text is lamp-only). It runs the full prototype→build pipeline internally and returns the final 3D model — the intermediate concept image is internal and is NOT shown to the user. For keycap you may also pass head_size_mm (10–40, default 23).
 3. Download the result with meshy_download_model (task_type "creative-lab-{product}-build"); for lamp this saves all parts (lamp + base STLs).
+
+## Scenario K: Cleaner Topology / Part-Separated Geometry (cheaply)
+Trigger: user wants an editable, part-separated, or lower-poly model from an image, or balks at the 20-credit mesh price.
+Suggested flow:
+1. Call meshy_image_to_3d with model_type:"smart-topology" (ai_model defaults to "meshy-t2"). Mesh is 5 credits instead of 20 and yields native part separation with a configurable target_polycount.
+2. Note this path is single-image only — multi-image-to-3d and text-to-3d do not offer smart-topology.
 
 ## Scenario G: General 3D Model (default)
 Trigger: none of the above.

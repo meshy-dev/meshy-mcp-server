@@ -139,21 +139,24 @@ Error Handling:
       title: "Retexture 3D Model",
       description: `Apply new AI-generated textures to an existing 3D model using Meshy AI.
 
-IMPORTANT: Before calling this tool, ask the user to provide EITHER:
+IMPORTANT: Before calling this tool, ask the user to provide EXACTLY ONE style input:
   - text_style_prompt: A text description of the desired texture style (e.g. "rusty metal", "cartoon style")
-  - image_style_url: A reference image URL for the texture style
-One of these is REQUIRED — the tool will fail without it.
-If both are provided, image_style_url takes precedence.
+  - image_style_url: A single reference image URL for the texture STYLE
+  - multiview_image_urls: 1-4 photos OF THE SAME OBJECT from different angles (not style refs)
+One of these is REQUIRED and they are MUTUALLY EXCLUSIVE — the tool will fail otherwise.
 
 Args:
   - input_task_id (string, optional): Task ID of an existing completed task to retexture
   - model_url (string, optional): Direct URL to a model file to retexture
     (Provide either input_task_id or model_url)
-  - text_style_prompt (string): Text prompt describing the desired texture style. Max 600 characters. REQUIRED if image_style_url not provided.
-  - image_style_url (string): URL of an image to use as texture style reference. REQUIRED if text_style_prompt not provided. Takes precedence if both given.
-  - ai_model (enum): AI model - "meshy-5", "meshy-6", or "latest" (default). Ask user which model before proceeding
+  - text_style_prompt (string): Text prompt describing the desired texture style. Max 600 characters.
+  - image_style_url (string): URL of an image to use as texture style reference.
+  - multiview_image_urls (string[]): 1-4 ordered views of the SAME object; element 0 is the primary
+    reference and alone drives metallic/roughness prediction. Requires ai_model "meshy-7" or "latest".
+  - ai_model (enum): AI model - "meshy-5", "meshy-6", "meshy-7", or "latest" (default, resolves to Meshy 7). Ask user which model before proceeding
   - enable_original_uv (boolean): Preserve original UV mapping (default: true)
   - enable_pbr (boolean): Enable PBR textures (default: false)
+  - texture_resolution (enum, optional): "2k" (default), "4k", or "8k". 8K costs 15 credits instead of 10 — confirm with the user. Replaces the deprecated hd_texture flag.
   - remove_lighting (boolean, optional): Remove highlights/shadows from base color texture. Default true. Only meshy-6/latest
   - target_formats (string[], optional): Output formats. 3MF must be explicitly included if needed.
   - response_format (enum): Output format - "markdown" or "json" (default: "markdown")
@@ -172,10 +175,11 @@ Next Steps:
 Examples:
   - Text style: { input_task_id: "abc-123", text_style_prompt: "rusty metal" }
   - Image style: { model_url: "https://...", image_style_url: "https://style-ref.jpg" }
+  - Multi-view: { input_task_id: "abc-123", ai_model: "meshy-7", multiview_image_urls: ["https://front.jpg", "https://side.jpg"] }
 
 Error Handling:
   - Returns "NotFound" if input_task_id doesn't exist
-  - Returns error if neither text_style_prompt nor image_style_url is provided`,
+  - Returns error if no style input is provided, or if more than one is provided`,
       inputSchema: RetextureInputSchema,
       outputSchema: TaskCreatedOutputSchema,
       annotations: {
@@ -197,12 +201,42 @@ Error Handling:
           };
         }
 
-        if (!params.text_style_prompt && !params.image_style_url) {
+        // The three style inputs are mutually exclusive on the API side
+        // (texture.multiview has no prompt field). Reject locally so the caller
+        // gets a named field instead of a generic 400.
+        const styleInputs = [
+          params.text_style_prompt ? "text_style_prompt" : null,
+          params.image_style_url ? "image_style_url" : null,
+          params.multiview_image_urls?.length ? "multiview_image_urls" : null
+        ].filter(Boolean) as string[];
+
+        if (styleInputs.length === 0) {
           return {
             isError: true,
             content: [{
               type: "text",
-              text: "Error: Either text_style_prompt or image_style_url must be provided."
+              text: "Error: provide exactly one style input — text_style_prompt, image_style_url, or multiview_image_urls."
+            }]
+          };
+        }
+        if (styleInputs.length > 1) {
+          return {
+            isError: true,
+            content: [{
+              type: "text",
+              text: `Error: text_style_prompt, image_style_url and multiview_image_urls are mutually exclusive, but ${styleInputs.join(" and ")} were provided. Pick one.`
+            }]
+          };
+        }
+
+        // multiview_image_urls runs the texture.multiview backend, which only
+        // exists on Meshy 7.
+        if (params.multiview_image_urls?.length && params.ai_model && params.ai_model !== "meshy-7" && params.ai_model !== "latest") {
+          return {
+            isError: true,
+            content: [{
+              type: "text",
+              text: `Error: multiview_image_urls requires ai_model "meshy-7" (or "latest"), but "${params.ai_model}" was given.`
             }]
           };
         }
@@ -216,14 +250,21 @@ Error Handling:
         if (params.model_url) request.model_url = params.model_url;
         if (params.text_style_prompt) request.text_style_prompt = params.text_style_prompt;
         if (params.image_style_url) request.image_style_url = params.image_style_url;
+        if (params.multiview_image_urls?.length) request.multiview_image_urls = params.multiview_image_urls;
         if (params.ai_model) request.ai_model = params.ai_model;
         if (params.target_formats) request.target_formats = params.target_formats;
         if (params.alpha_thumbnail !== undefined) request.alpha_thumbnail = params.alpha_thumbnail;
-        // hd_texture / remove_lighting are meshy-6/latest-only; sending with meshy-5 makes the API 400.
+        // texture_resolution / hd_texture need an HD-capable model (anything but
+        // meshy-5). remove_lighting stays meshy-6/latest-only; sending it with
+        // meshy-5 makes the API 400.
         {
+          const isHDCapableRetexture = params.ai_model !== "meshy-5";
           const isMeshy6Retexture = params.ai_model === "meshy-6" || params.ai_model === "latest" || !params.ai_model;
-          if (isMeshy6Retexture) {
+          if (isHDCapableRetexture) {
+            if (params.texture_resolution !== undefined) request.texture_resolution = params.texture_resolution;
             if (params.hd_texture !== undefined) request.hd_texture = params.hd_texture;
+          }
+          if (isMeshy6Retexture) {
             if (params.remove_lighting !== undefined) request.remove_lighting = params.remove_lighting;
           }
         }

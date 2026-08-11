@@ -3,7 +3,15 @@
  */
 
 import { z } from "zod";
-import { AIModel, ModelType, SymmetryMode, Topology, PoseMode } from "../constants.js";
+import {
+  AIModel,
+  ModelType,
+  SmartTopologyModel,
+  SymmetryMode,
+  TextureResolution,
+  Topology,
+  PoseMode
+} from "../constants.js";
 
 /**
  * Shared target_formats schema.
@@ -25,7 +33,10 @@ const alphaThumbnail = () =>
     .describe("Also render a transparent-background (RGBA) preview, returned as alpha_thumbnail_url. Default false.");
 const hdTexture = () =>
   z.boolean().optional()
-    .describe("Generate the base color texture at 4K (4096×4096). Default false. Only supported when ai_model is meshy-6 or latest; PBR maps stay at 2K.");
+    .describe("DEPRECATED — use texture_resolution instead (hd_texture: true is exactly texture_resolution: '4k'). Kept for backward compatibility.");
+const textureResolution = () =>
+  z.nativeEnum(TextureResolution).optional()
+    .describe("Base color texture resolution: '2k' (default), '4k', or '8k'. 8K costs 15 credits instead of 10 — confirm with the user before selecting it. Only supported on meshy-6 / meshy-7 / latest / smart-topology; PBR maps stay at 2K. Replaces the deprecated hd_texture flag.");
 const multiViewThumbnails = () =>
   z.boolean().optional()
     .describe("Also return 4 cardinal-view thumbnails (front/back/left/right). Default false.");
@@ -43,12 +54,12 @@ import {
  */
 export const TextTo3DInputSchema = z.object({
   prompt: PromptSchema,
-  ai_model: z.nativeEnum(AIModel)
+  ai_model: z.enum([AIModel.MESHY_5, AIModel.MESHY_6, AIModel.LATEST])
     .default(AIModel.LATEST)
-    .describe("AI model: 'meshy-5', 'meshy-6', or 'latest' (default, currently resolves to Meshy 6). IMPORTANT: Before calling this tool, ask the user which model to use and explain the differences: meshy-6/latest = best quality (20 credits), meshy-5 = previous gen (5 credits)"),
-  model_type: z.nativeEnum(ModelType)
+    .describe("AI model: 'meshy-5', 'meshy-6', or 'latest' (default). NOTE: text-to-3d does NOT accept 'meshy-7', and its 'latest' still resolves to Meshy 6 (unlike image-to-3d, where latest is Meshy 7). IMPORTANT: Before calling this tool, ask the user which model to use and explain the differences: meshy-6/latest = best quality (20 credits), meshy-5 = previous gen (5 credits)"),
+  model_type: z.enum([ModelType.STANDARD, ModelType.LOWPOLY])
     .optional()
-    .describe("Model type: 'standard' or 'lowpoly'. When 'lowpoly', ai_model/topology/target_polycount/should_remesh are ignored"),
+    .describe("Model type: 'standard' or 'lowpoly' (smart-topology is image-to-3d only). When 'lowpoly', ai_model/topology/target_polycount/should_remesh are ignored"),
   topology: z.nativeEnum(Topology)
     .optional()
     .describe("Mesh topology type (quad or triangle)"),
@@ -90,12 +101,15 @@ export const ImageTo3DInputSchema = z.object({
   input_task_id: z.string()
     .optional()
     .describe("Chain from a SUCCEEDED text-to-image or image-to-image task: use its generated image as the input instead of image_url/file_path. Provide only one image source."),
-  ai_model: z.nativeEnum(AIModel)
-    .default(AIModel.LATEST)
-    .describe("AI model: 'meshy-5', 'meshy-6', or 'latest' (default, currently resolves to Meshy 6). IMPORTANT: Before calling this tool, ask the user which model to use and explain the differences: meshy-6/latest = best quality (20 credits), meshy-5 = previous gen (5 credits)"),
+  ai_model: z.union([z.nativeEnum(AIModel), z.nativeEnum(SmartTopologyModel)])
+    .optional()
+    .describe("AI model. Standard generation: 'meshy-5', 'meshy-6', 'meshy-7', or 'latest' (default — resolves to Meshy 7 here). Smart Topology generation (set model_type: 'smart-topology'): 'meshy-t2' (default, recommended — native part separation) or 'meshy-t1'. IMPORTANT: Before calling this tool, ask the user which model to use and explain the trade-off: meshy-7/latest = best quality (20 credits mesh, 30 textured); meshy-t2 smart-topology = clean part-separated geometry and much cheaper (5 credits mesh, 15 textured); meshy-5 = previous gen (5 credits). NOTE: passing remove_lighting with 'latest' keeps the task on Meshy 6."),
+  ultra_mode: z.boolean()
+    .optional()
+    .describe("Meshy 7 Ultra — run the extra high-detail geometry pass (+5 credits). Only valid when the task actually runs Meshy 7: pass ai_model 'meshy-7' explicitly (reliable), or 'latest' while latest resolves to Meshy 7. On meshy-5/meshy-6 the API returns 400. Single-image only — not available on multi-image-to-3d. Cannot be combined with model_type 'lowpoly'. Confirm the extra cost with the user first."),
   model_type: z.nativeEnum(ModelType)
     .optional()
-    .describe("Model type: 'standard' or 'lowpoly'"),
+    .describe("Model type: 'standard' (default), 'smart-topology' (part-separated geometry via meshy-t1/meshy-t2, much cheaper), or 'lowpoly' (deprecated — prefer smart-topology)"),
   pose_mode: z.nativeEnum(PoseMode)
     .optional()
     .describe("Pose mode for character models: 'a-pose' or 't-pose'. IMPORTANT: When the user intends to rig or animate the model, default to 't-pose' for best rigging results"),
@@ -126,6 +140,7 @@ export const ImageTo3DInputSchema = z.object({
   texture_image_url: UrlSchema
     .optional()
     .describe("Image URL to guide texturing"),
+  texture_resolution: textureResolution(),
   hd_texture: hdTexture(),
   image_enhancement: z.boolean()
     .optional()
@@ -165,9 +180,10 @@ export const TextTo3DRefineInputSchema = z.object({
   texture_image_url: UrlSchema
     .optional()
     .describe("Image URL to guide texturing"),
-  ai_model: z.nativeEnum(AIModel)
+  ai_model: z.enum([AIModel.MESHY_5, AIModel.MESHY_6, AIModel.LATEST])
     .default(AIModel.LATEST)
-    .describe("AI model: 'meshy-5', 'meshy-6', or 'latest' (default, currently resolves to Meshy 6). IMPORTANT: Before calling this tool, ask the user which model to use and explain the differences: meshy-6/latest = best quality (10 credits), meshy-5 = previous gen (10 credits)"),
+    .describe("AI model: 'meshy-5', 'meshy-6', or 'latest' (default). NOTE: text-to-3d does NOT accept 'meshy-7' and its 'latest' still resolves to Meshy 6. Texturing costs 10 credits at 2K/4K, 15 at 8K."),
+  texture_resolution: textureResolution(),
   hd_texture: hdTexture(),
   remove_lighting: z.boolean()
     .default(true)
@@ -200,12 +216,12 @@ export const MultiImageTo3DInputSchema = z.object({
   input_task_id: z.string()
     .optional()
     .describe("Chain from a SUCCEEDED text-to-image / image-to-image task that produced multi-view images, using them as the input instead of image_urls/file_paths."),
-  ai_model: z.nativeEnum(AIModel)
+  ai_model: z.enum([AIModel.MESHY_5, AIModel.MESHY_6, AIModel.MESHY_7, AIModel.LATEST])
     .default(AIModel.LATEST)
-    .describe("AI model: 'meshy-5', 'meshy-6', or 'latest' (default, currently resolves to Meshy 6). IMPORTANT: Before calling this tool, ask the user which model to use and explain the differences: meshy-6/latest = best quality (20 credits), meshy-5 = previous gen (5 credits)"),
-  model_type: z.nativeEnum(ModelType)
+    .describe("AI model: 'meshy-5', 'meshy-6', 'meshy-7', or 'latest' (default — resolves to Meshy 7). Smart Topology (meshy-t1/meshy-t2) and ultra_mode are single-image-only and NOT available here. IMPORTANT: Before calling this tool, ask the user which model to use: meshy-7/latest = best quality (20 credits mesh, 30 textured), meshy-5 = previous gen (5 credits)"),
+  model_type: z.enum([ModelType.STANDARD, ModelType.LOWPOLY])
     .optional()
-    .describe("Model type: 'standard' or 'lowpoly'"),
+    .describe("Model type: 'standard' or 'lowpoly' (smart-topology is single-image-to-3d only)"),
   pose_mode: z.nativeEnum(PoseMode)
     .optional()
     .describe("Pose mode for character models: 'a-pose' or 't-pose'. IMPORTANT: When the user intends to rig or animate the model, default to 't-pose' for best rigging results"),
@@ -236,6 +252,7 @@ export const MultiImageTo3DInputSchema = z.object({
   texture_image_url: UrlSchema
     .optional()
     .describe("Image URL to guide texturing"),
+  texture_resolution: textureResolution(),
   hd_texture: hdTexture(),
   image_enhancement: z.boolean()
     .optional()
