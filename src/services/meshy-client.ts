@@ -6,6 +6,7 @@ import axios, { AxiosInstance, AxiosRequestConfig } from "axios";
 import { API_BASE_URL, API_TIMEOUT, RETRY_DELAYS, MAX_RETRIES } from "../constants.js";
 import { isRetryableError, isRateLimitError } from "./error-handler.js";
 import { GetTaskResponse } from "../types.js";
+import { USER_AGENT } from "../version.js";
 
 export class MeshyClient {
   private client: AxiosInstance;
@@ -19,7 +20,8 @@ export class MeshyClient {
       timeout: API_TIMEOUT,
       headers: {
         "Content-Type": "application/json",
-        "Accept": "application/json"
+        "Accept": "application/json",
+        "User-Agent": USER_AGENT
       }
     });
 

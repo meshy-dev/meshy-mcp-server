@@ -30,10 +30,11 @@ import { registerPrintingTools } from "./tools/printing.js";
 import { registerCreativeLabTools } from "./tools/creative-lab.js";
 import { registerBalanceTool } from "./tools/balance.js";
 import { MESHY_INSTRUCTIONS } from "./instructions.js";
+import { VERSION } from "./version.js";
 
 // Create MCP server instance
 const server = new McpServer(
-  { name: "@meshy-ai/meshy-mcp-server", version: "0.4.0" },
+  { name: "@meshy-ai/meshy-mcp-server", version: VERSION },
   { instructions: MESHY_INSTRUCTIONS }
 );
 
@@ -115,7 +116,7 @@ async function runHTTP() {
 
   // Health check endpoint
   app.get("/health", (req, res) => {
-    res.json({ status: "ok", server: "meshy-mcp-server", version: "0.4.0" });
+    res.json({ status: "ok", server: "meshy-mcp-server", version: VERSION });
   });
 
   // MCP endpoint
