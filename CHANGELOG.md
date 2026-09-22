@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.5.2] - 2026-09-22
+
+### Fixed
+
+- **Tools no longer rejected by Claude Desktop.** Every tool schema we published carried
+  `"$schema": "http://json-schema.org/draft-07/schema#"` — the MCP SDK stamps it on when
+  converting Zod schemas and offers no way to override it (confirmed on SDK 1.27–1.30, Zod 3
+  and 4). Clients that validate tool schemas with an Ajv configured for JSON Schema 2020-12,
+  as Claude Desktop does, reject every such tool with *"has an invalid outputSchema: JSON
+  Schema declares an unsupported dialect"*. The server now strips the dialect marker before
+  the tool list goes out, on both the stdio and HTTP transports, so clients validate under
+  their own default. All 39 published schemas (24 input + 15 output) now compile under
+  Ajv 2020-12; before the fix, all 39 failed.
+
+  Note this also affected `inputSchema`, not just `outputSchema` — the fix covers both.
+
+  Reported in [#8](https://github.com/meshy-dev/meshy-mcp-server/issues/8), against 0.4.0
+  and confirmed on 0.5.1. Rejected tool calls never reached the API, so no credits were
+  consumed for the generations that failed this way.
+
+## [0.5.1] - 2026-08-27
+
+Published to npm from the 0.5.0 tree with no source changes of its own; the version bump
+was never committed back here, which is why this entry is written after the fact.
+
 ## [0.5.0] - 2026-08-11
 
 Sync with everything the public Meshy API shipped between 2026-06-24 and 2026-08-11.
