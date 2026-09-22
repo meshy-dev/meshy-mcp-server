@@ -27,3 +27,6 @@ Thumbs.db
 
 # npm pack artifacts
 *.tgz
+
+# npm auth — never commit a publish token
+.npmrc
