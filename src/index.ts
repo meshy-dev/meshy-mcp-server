@@ -18,6 +18,7 @@ console.log = originalLog;
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import express from "express";
 import { createMeshyClient } from "./services/meshy-client.js";
 import { registerGenerationTools } from "./tools/generation.js";
@@ -86,6 +87,36 @@ async function initializeServer() {
 }
 
 /**
+ * Strip the `$schema` dialect marker from every tool schema we publish.
+ *
+ * The SDK converts our Zod schemas with zod-to-json-schema, which stamps
+ * `"$schema": "http://json-schema.org/draft-07/schema#"` on both inputSchema
+ * and outputSchema — with no way to override it (verified on SDK 1.27-1.30,
+ * Zod 3 and 4). Claude Desktop compiles tool schemas with an Ajv configured
+ * for JSON Schema 2020-12 only, so it rejects every tool carrying that marker:
+ * "Tool 'x' has an invalid outputSchema: JSON Schema declares an unsupported
+ * dialect". Our schemas use nothing dialect-specific, so dropping the marker
+ * lets each client validate under its own default (2020-12) and keeps the
+ * schemas themselves intact.
+ *
+ * Remove this once the SDK stops hardcoding draft-07.
+ */
+function stripSchemaDialect(transport: Transport): Transport {
+  const send = transport.send.bind(transport);
+  transport.send = (message, options) => {
+    const tools = (message as { result?: { tools?: unknown } }).result?.tools;
+    if (Array.isArray(tools)) {
+      for (const tool of tools) {
+        delete tool?.inputSchema?.$schema;
+        delete tool?.outputSchema?.$schema;
+      }
+    }
+    return send(message, options);
+  };
+  return transport;
+}
+
+/**
  * Run server with stdio transport (for local integrations)
  */
 async function runStdio() {
@@ -94,7 +125,7 @@ async function runStdio() {
   await initializeServer();
 
   const transport = new StdioServerTransport();
-  await server.connect(transport);
+  await server.connect(stripSchemaDialect(transport));
 
   console.error("✓ Meshy MCP Server running via stdio");
   console.error("Ready to accept requests from MCP client");
@@ -128,7 +159,7 @@ async function runHTTP() {
 
     res.on("close", () => transport.close());
 
-    await server.connect(transport);
+    await server.connect(stripSchemaDialect(transport));
     await transport.handleRequest(req, res, req.body);
   });
 
