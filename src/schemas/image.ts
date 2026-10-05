@@ -11,17 +11,17 @@ import { ResponseFormatSchema, PromptSchema, UrlSchema } from "./common.js";
  */
 export const TextToImageInputSchema = z.object({
   ai_model: z.nativeEnum(TextToImageModel)
-    .describe("AI model: 'nano-banana' (3 credits), 'nano-banana-2' (6), 'nano-banana-pro' (9), or 'gpt-image-2' (9). gpt-image-2 supports only a limited set of aspect ratios."),
+    .describe("AI model: 'nano-banana' (3 credits), 'nano-banana-2' (6), 'nano-banana-pro' (9), or a GPT Image model: 'gpt-image-2', 'gpt-image-2-5-flare', 'gpt-image-2-5-sunburst' (9 each)."),
   prompt: PromptSchema,
   generate_multi_view: z.boolean()
     .default(false)
-    .describe("Generate multiple viewpoint images (front, side, back)"),
+    .describe("Generate multiple viewpoint images (front, side, back). Cannot be combined with aspect_ratio."),
   pose_mode: z.nativeEnum(PoseMode)
     .optional()
     .describe("Pose mode for character images: 'a-pose' or 't-pose'"),
   aspect_ratio: z.nativeEnum(AspectRatio)
-    .default(AspectRatio.SQUARE)
-    .describe("Aspect ratio. Support is model-specific: nano-banana / nano-banana-2 / nano-banana-pro accept '1:1','16:9','9:16','4:3','3:4'; gpt-image-2 accepts ONLY '1:1','3:2','2:3' ('3:2'/'2:3' are gpt-image-2-only and rejected by the nano-banana family). Default '1:1'."),
+    .optional()
+    .describe("Aspect ratio (API default '1:1'). All models accept '1:1','16:9','9:16','4:3','3:4'; '3:2' and '2:3' are GPT Image models only. Leave unset when generate_multi_view is true."),
   response_format: ResponseFormatSchema
 }).strict();
 
@@ -30,7 +30,7 @@ export const TextToImageInputSchema = z.object({
  */
 export const ImageToImageInputSchema = z.object({
   ai_model: z.nativeEnum(TextToImageModel)
-    .describe("AI model: 'nano-banana' (3 credits), 'nano-banana-2' (6), 'nano-banana-pro' (9), or 'gpt-image-2' (12 for image-to-image)."),
+    .describe("AI model: 'nano-banana' (3 credits), 'nano-banana-2' (6), 'nano-banana-pro' (9), or a GPT Image model: 'gpt-image-2', 'gpt-image-2-5-flare', 'gpt-image-2-5-sunburst' (12 each for image-to-image)."),
   prompt: PromptSchema,
   reference_image_urls: z.array(z.string())
     .min(1)

@@ -1,6 +1,6 @@
 {
   "name": "@meshy-ai/meshy-mcp-server",
-  "version": "0.5.2",
+  "version": "0.6.0",
   "description": "MCP server for Meshy AI 3D generation platform",
   "type": "module",
   "main": "dist/index.js",
@@ -12,6 +12,7 @@
     "dist/",
     "LICENSE",
     "README.md",
+    "docs/maintenance.md",
     ".env.example"
   ],
   "scripts": {
@@ -20,6 +21,7 @@
     "build": "tsc",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
+    "test": "npm run build && node --test tests/*.test.mjs",
     "prepublishOnly": "npm run clean && npm run build"
   },
   "engines": {

@@ -31,11 +31,11 @@ export function registerImageTools(server: McpServer, client: MeshyClient) {
 Useful for creating reference images that can then be used with image-to-3d or image-to-image.
 
 Args:
-  - ai_model (enum): AI model to use - "nano-banana" or "nano-banana-pro" (required)
+  - ai_model (enum): "nano-banana" (3 credits), "nano-banana-2" (6), "nano-banana-pro" (9), "gpt-image-2" / "gpt-image-2-5-flare" / "gpt-image-2-5-sunburst" (9) (required)
   - prompt (string): Text description of the image to generate (2-600 characters, required)
-  - generate_multi_view (boolean, optional): Generate multiple viewpoint images (default: false)
+  - generate_multi_view (boolean, optional): Generate multiple viewpoint images (default: false). Do not combine with aspect_ratio
   - pose_mode (enum, optional): Pose for character images - "a-pose" or "t-pose"
-  - aspect_ratio (enum, optional): Image aspect ratio (default: "1:1"). Options: "1:1", "16:9", "9:16", "4:3", "3:4"
+  - aspect_ratio (enum, optional): Image aspect ratio (API default: "1:1"). Options: "1:1", "16:9", "9:16", "4:3", "3:4"; "3:2" / "2:3" on GPT Image models only
   - response_format (enum): Output format - "markdown" or "json" (default: "markdown")
 
 Returns:
@@ -67,12 +67,22 @@ Error Handling:
     },
     async (params: z.infer<typeof TextToImageInputSchema>) => {
       try {
+        // The API rejects aspect_ratio together with generate_multi_view.
+        if (params.generate_multi_view && params.aspect_ratio) {
+          return {
+            isError: true,
+            content: [{
+              type: "text",
+              text: "Error: aspect_ratio cannot be set when generate_multi_view is true. Drop one of them."
+            }]
+          };
+        }
         const request: TextToImageApiRequest = {
           ai_model: params.ai_model,
           prompt: params.prompt,
-          generate_multi_view: params.generate_multi_view,
-          aspect_ratio: params.aspect_ratio
+          generate_multi_view: params.generate_multi_view
         };
+        if (params.aspect_ratio) request.aspect_ratio = params.aspect_ratio;
 
         if (params.pose_mode) request.pose_mode = params.pose_mode;
 
@@ -119,7 +129,7 @@ Reference Image Input (provide ONE of these):
 IMPORTANT: For local files, always use reference_file_paths instead of manually base64-encoding.
 
 Other Args:
-  - ai_model (enum): "nano-banana" or "nano-banana-pro" (required)
+  - ai_model (enum): "nano-banana" (3 credits), "nano-banana-2" (6), "nano-banana-pro" (9), "gpt-image-2" / "gpt-image-2-5-flare" / "gpt-image-2-5-sunburst" (12) (required)
   - prompt (string): Text description guiding the transformation (required)
   - generate_multi_view (boolean, optional): Generate multiple viewpoint images (default: false)
   - response_format (enum): Output format (default: "markdown")

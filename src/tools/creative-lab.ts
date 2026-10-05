@@ -1,12 +1,12 @@
 /**
- * Creative Lab tool — one tool that turns a photo (or text prompt) into a finished
+ * Creative Lab tool — one tool that turns a photo into a finished
  * physical-product 3D model, end-to-end.
  *
- * The Meshy API has two stages — prototype (concept image, 6cr) then build (textured
- * 3D model, 30cr) — linked by input_task_id. This tool runs BOTH internally, hides the
- * intermediate concept image, and returns only the final 3D product (total 36 credits).
+ * The Meshy API has two stages — prototype then build — linked by input_task_id.
+ * This tool runs BOTH internally, hides the intermediate prototype, and returns only
+ * the final 3D product. Cost per product: see creativeLabCredits().
  *
- * Products (OpenAPI): figure, lamp, keychain, fridge-magnet.
+ * Products (OpenAPI): figure, lamp, keychain, fridge-magnet, vinyl-figure, brick-figure, keycap.
  */
 
 import { z } from "zod";
@@ -88,26 +88,25 @@ export function registerCreativeLabTools(server: McpServer, client: MeshyClient)
     "meshy_creative_lab",
     {
       title: "Creative Lab — Make a Product (end-to-end)",
-      description: `Turn a source photo (or text prompt) into a finished Creative Lab product 3D model.
+      description: `Turn a source photo into a finished Creative Lab product 3D model.
 
 Products and cost:
-  - "figure" (chibi collectible), "lamp" (3D-printable lampshade), "keychain", "fridge-magnet",
-    "vinyl-figure" (vinyl-toy style), "brick-figure" (brick-minifigure style) → 36 credits (6 + 30)
+  - "figure" (chibi collectible), "keychain", "fridge-magnet", "vinyl-figure" (vinyl-toy style),
+    "brick-figure" (brick-minifigure style) → 36 credits (6 + 30)
+  - "lamp" (3D-printable lampshade with base plate) → 36 credits (30 + 6)
   - "keycap" (Cherry MX 1u keycap) → 62 credits (12 + 50)
 
 This runs the full two-stage Meshy pipeline internally — concept prototype then 3D build — and returns ONLY the final 3D model. The intermediate concept image is internal and is never surfaced. One call does everything; it blocks while both stages run (typically 2–5 minutes) and reports progress.
 
 IMPORTANT: confirm the credit cost with the user before calling — and note keycap costs 62, not 36.
 
-INPUT — provide ONE source:
+INPUT — provide ONE image source (every product is image-only):
   - Local image → file_path: "/absolute/path/photo.jpg" (.jpg/.jpeg/.png/.webp)
   - Remote image → image_url: "https://example.com/photo.jpg" (or data URI)
-  - Text prompt → text: "..."  (ONLY "lamp" accepts text; every other product is image-only)
 
 Args:
   - product (enum, REQUIRED): "figure" | "lamp" | "keychain" | "fridge-magnet" | "vinyl-figure" | "brick-figure" | "keycap"
   - image_url / file_path (string, optional): image source
-  - text (string, optional): text prompt instead of an image (lamp only; ≤800 chars)
   - image_subject (enum, optional): "character" | "landscape" — lamp only
   - head_size_mm (number, optional): keycap only — head longest edge in mm (10–40, default 23)
   - base_model (string, optional): keycap only — "cherry-mx-1x1-r1" (the only profile today)
@@ -121,7 +120,7 @@ To multicolor-print the result: a Creative Lab model can only be sent to meshy_p
 
 Examples:
   - { product: "figure", file_path: "/Users/me/portrait.jpg" }
-  - { product: "lamp", text: "a stylized owl on a branch under moonlight" }
+  - { product: "lamp", image_url: "https://example.com/owl.jpg", image_subject: "character" }
   - { product: "keycap", file_path: "/Users/me/cat.jpg", head_size_mm: 25 }
 
 If the prototype stage fails, the build is NOT started (only the prototype is charged).`,
@@ -136,26 +135,14 @@ If the prototype stage fails, the build is NOT started (only the prototype is ch
     async (params: z.infer<typeof CreativeLabInputSchema>, extra) => {
       try {
         const hasImage = Boolean(params.image_url || params.file_path);
-        if (!hasImage && !params.text) {
+        if (!hasImage) {
           return {
             isError: true,
-            content: [{ type: "text", text: "Error: provide one input source — image_url, file_path, or text." }]
+            content: [{ type: "text", text: "Error: provide an image source — image_url or file_path. Every Creative Lab product is image-only." }]
           };
         }
 
         const product = params.product;
-
-        // Lamp is the only product whose prototype accepts a text prompt; the
-        // rest require image_url and 400 without it.
-        if (params.text && !hasImage && product !== CreativeLabProduct.LAMP) {
-          return {
-            isError: true,
-            content: [{
-              type: "text",
-              text: `Error: the "${product}" product is image-only — provide image_url or file_path. Only "lamp" accepts a text prompt.`
-            }]
-          };
-        }
 
         const credits = creativeLabCredits(product);
         const protoBase = `/openapi/creative-lab/${product}/v1/prototype`;
@@ -191,13 +178,10 @@ If the prototype stage fails, the build is NOT started (only the prototype is ch
         };
 
         // ── Stage 1: prototype ──────────────────────────────────────────
-        const protoReq: CreativeLabPrototypeApiRequest = {};
-        if (params.text && !hasImage) {
-          protoReq.text = params.text;
-        } else {
-          protoReq.image_url = await resolveImageSource(params.image_url, params.file_path);
-          if (params.image_subject) protoReq.image_subject = params.image_subject;
-        }
+        const protoReq: CreativeLabPrototypeApiRequest = {
+          image_url: await resolveImageSource(params.image_url, params.file_path)
+        };
+        if (params.image_subject) protoReq.image_subject = params.image_subject;
         if (params.name) protoReq.name = params.name;
 
         const protoResp = await client.post<CreateTaskApiResponse>(

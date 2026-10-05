@@ -1,5 +1,5 @@
 /**
- * Zod schema for the Creative Lab tool (one tool covering all 7 OpenAPI products:
+ * Zod schema for the Creative Lab tool (one tool covering 7 OpenAPI products:
  * figure, lamp, keychain, fridge-magnet, vinyl-figure, brick-figure, keycap).
  *
  * The Meshy API splits Creative Lab into two stages — prototype (concept image)
@@ -7,9 +7,8 @@
  * detail. This single tool runs BOTH stages end-to-end, hides the intermediate
  * concept image, and returns only the final 3D product.
  *
- * Cost: 6 + 30 = 36 credits for every product EXCEPT keycap, whose prototype
- * renders two images per candidate (12) and whose build carries the base-plate
- * generation (50) → 62 credits.
+ * Cost: 36 credits for every product (6 + 30; lamp is 30 + 6) EXCEPT keycap,
+ * which is 12 + 50 = 62 credits. Every product is image-only.
  */
 
 import { z } from "zod";
@@ -25,10 +24,6 @@ export const CreativeLabInputSchema = z.object({
   file_path: z.string()
     .optional()
     .describe("ABSOLUTE path to a LOCAL source photo (.jpg/.jpeg/.png/.webp). PREFERRED for local files; the server auto-encodes it."),
-  text: z.string()
-    .max(800, "Text prompt must not exceed 800 characters")
-    .optional()
-    .describe("Text prompt instead of an image. ONLY the 'lamp' product accepts text; every other product is image-only. Provide EITHER an image (image_url/file_path) OR text. Max 800 chars."),
   image_subject: z.enum(["character", "landscape"])
     .optional()
     .describe("Lamp only: subject type of the input image, 'character' or 'landscape'."),

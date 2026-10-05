@@ -65,9 +65,9 @@ export const RetextureInputSchema = z.object({
     .optional()
     .describe("Direct URL to a model file to retexture"),
   text_style_prompt: z.string()
-    .max(600, "Prompt must not exceed 600 characters")
+    .max(800, "Prompt must not exceed 800 characters")
     .optional()
-    .describe("Text prompt describing the desired texture style. Max 600 characters. Mutually exclusive with image_style_url and multiview_image_urls — provide exactly one style input."),
+    .describe("Text prompt describing the desired texture style. Max 800 characters. Mutually exclusive with image_style_url and multiview_image_urls — provide exactly one style input."),
   image_style_url: UrlSchema
     .optional()
     .describe("URL of a SINGLE image to use as texture style reference. Mutually exclusive with text_style_prompt and multiview_image_urls."),
@@ -75,25 +75,25 @@ export const RetextureInputSchema = z.object({
     .min(1, "Provide at least 1 view")
     .max(4, "At most 4 views are accepted")
     .optional()
-    .describe("1–4 ordered views OF THE SAME OBJECT (not style references) — element 0 is the primary reference and alone drives the metallic/roughness prediction. Requires ai_model 'meshy-7' or 'latest'. Mutually exclusive with text_style_prompt and image_style_url."),
-  ai_model: z.enum([AIModel.MESHY_5, AIModel.MESHY_6, AIModel.MESHY_7, AIModel.LATEST])
+    .describe("1–4 ordered views OF THE SAME OBJECT (not style references) — element 0 is the primary reference and alone drives the metallic/roughness prediction. Runs on Meshy 7 (the tool sends ai_model 'meshy-7' for you when ai_model is 'latest'). Mutually exclusive with text_style_prompt and image_style_url."),
+  ai_model: z.enum([AIModel.MESHY_6_LITE, AIModel.MESHY_6, AIModel.MESHY_7, AIModel.LATEST, AIModel.MESHY_5])
     .default(AIModel.LATEST)
-    .describe("AI model: 'meshy-5', 'meshy-6', 'meshy-7', or 'latest' (default — resolves to Meshy 7). multiview_image_urls requires meshy-7 or latest. Texturing costs 10 credits at 2K/4K, 15 at 8K."),
+    .describe("AI model: 'latest' (default, = Meshy 7), 'meshy-7', 'meshy-6', or 'meshy-6-lite' (fast, 2K textures only). No meshy-7.1 on retexture. 'meshy-5' is deprecated and retires 2026-10-10 (use meshy-6-lite). multiview_image_urls needs Meshy 7. Texturing costs 10 credits at 2K/4K, 15 at 8K."),
   enable_original_uv: z.boolean()
-    .default(true)
-    .describe("Preserve the original UV mapping"),
+    .optional()
+    .describe("Keep the model's existing UV layout instead of unwrapping fresh UVs. Default: true with input_task_id (Meshy-generated UVs are reused), API default false with model_url (fresh unwrap, safest for uploads without good UVs)."),
   enable_pbr: z.boolean()
     .default(false)
     .describe("Enable physically-based rendering textures"),
   texture_resolution: z.nativeEnum(TextureResolution)
     .optional()
-    .describe("Base color texture resolution: '2k' (default), '4k', or '8k'. 8K costs 15 credits instead of 10 — confirm with the user before selecting it. Only supported on meshy-6 / meshy-7 / latest; PBR maps stay at 2K. Replaces the deprecated hd_texture flag."),
+    .describe("Base color texture resolution: '2k' (default), '4k', or '8k'. 8K costs 15 credits instead of 10 — confirm with the user before selecting it. 4k/8k need meshy-6 / meshy-7 / latest (not meshy-6-lite); PBR maps stay at 2K. Replaces the deprecated hd_texture flag."),
   hd_texture: z.boolean()
     .optional()
     .describe("DEPRECATED — use texture_resolution instead (hd_texture: true is exactly texture_resolution: '4k'). Kept for backward compatibility."),
   remove_lighting: z.boolean()
-    .default(true)
-    .describe("Removes highlights and shadows from the base color texture for cleaner results under custom lighting. Default true. Only supported when ai_model is meshy-6 or latest"),
+    .optional()
+    .describe("Removes highlights and shadows from the base color texture for cleaner results under custom lighting. Only honored on meshy-6 (API default true there); not sent for other models."),
   target_formats: z.array(z.enum(["glb", "obj", "fbx", "stl", "usdz", "3mf"]))
     .optional()
     .describe("Output formats to generate. When omitted, produces glb/obj/fbx/stl/usdz but NOT 3mf. To get 3MF, you MUST include '3mf' explicitly."),

@@ -38,13 +38,13 @@ export const SendToSlicerInputSchema = z.object({
  * Provide exactly one of input_task_id / model_url. Validation happens at the
  * handler level so the exported schema stays a plain ZodObject.
  *
- * input_task_id constraints: must be a SUCCEEDED task that used Meshy 6 or any
- * Preview model. Supported task types: image-to-3d, multi-image-to-3d,
+ * input_task_id constraints: must be a SUCCEEDED task that used Meshy 6 or
+ * newer (including Meshy 7 / 7.1). Supported task types: image-to-3d, multi-image-to-3d,
  * text-to-3d, remesh, retexture.
  */
 export const AnalyzePrintabilityInputSchema = z.object({
   input_task_id: TaskIdSchema.optional()
-    .describe("ID of a SUCCEEDED upstream task to analyze (must use Meshy 6 or a Preview model). Mutually exclusive with model_url."),
+    .describe("ID of a SUCCEEDED upstream task to analyze (must use Meshy 6 or newer, including Meshy 7 / 7.1). Mutually exclusive with model_url."),
   model_url: UrlSchema.optional()
     .describe("Public URL of a 3D model to analyze (.glb / .gltf / .obj / .fbx / .stl, max 100 MB). Mutually exclusive with input_task_id."),
   response_format: ResponseFormatSchema
@@ -52,13 +52,13 @@ export const AnalyzePrintabilityInputSchema = z.object({
 
 /**
  * Repair-printability input schema — POST /openapi/v1/print/repair (10 credits).
- * Output format mirrors input format; for input_task_id the output is GLB.
+ * Output format matches the input format; for input_task_id the output is GLB.
  */
 export const RepairPrintabilityInputSchema = z.object({
   input_task_id: TaskIdSchema.optional()
     .describe("ID of a SUCCEEDED upstream task with a GLB asset. Output will be GLB. Mutually exclusive with model_url."),
   model_url: UrlSchema.optional()
-    .describe("Public URL of a 3D model to repair (.glb / .stl / .obj / .fbx / .gltf, max 100 MB). Output mirrors the input format for .glb/.stl/.obj; .fbx and .gltf are decoded and returned as repaired GLB. .fbx must be an https URL — it cannot be passed as a data: URI. Mutually exclusive with input_task_id."),
+    .describe("Public URL of a 3D model to repair (.glb / .stl / .obj / .fbx / .gltf, max 100 MB). Output matches the input format (.glb/.stl/.obj/.fbx/.gltf). .fbx must be an https URL — it cannot be passed as a data: URI. Mutually exclusive with input_task_id."),
   response_format: ResponseFormatSchema
 }).strict();
 

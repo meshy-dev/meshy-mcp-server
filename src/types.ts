@@ -37,6 +37,7 @@ export interface TextTo3DApiRequest {
   mode: string;
   prompt: string;
   ai_model: string;
+  geometry_resolution?: "standard" | "2k" | "4k";
   moderation: boolean;
   model_type?: string;
   target_polycount?: number;
@@ -58,6 +59,7 @@ export interface ImageTo3DApiRequest {
   enable_pbr: boolean;
   moderation: boolean;
   ai_model?: string;
+  geometry_resolution?: "standard" | "2k" | "4k";
   ultra_mode?: boolean;
   model_type?: string;
   pose_mode?: string;
@@ -86,7 +88,7 @@ export interface TextTo3DRefineApiRequest {
   mode: string;
   preview_task_id: string;
   enable_pbr: boolean;
-  ai_model: string;
+  ai_model?: string;
   texture_prompt?: string;
   texture_image_url?: string;
   texture_resolution?: string;
@@ -105,6 +107,7 @@ export interface MultiImageTo3DApiRequest {
   enable_pbr: boolean;
   moderation: boolean;
   ai_model?: string;
+  geometry_resolution?: "standard" | "2k";
   model_type?: string;
   pose_mode?: string;
   topology?: string;
@@ -114,6 +117,7 @@ export interface MultiImageTo3DApiRequest {
   should_texture?: boolean;
   texture_prompt?: string;
   texture_image_url?: string;
+  texture_image_urls?: string[];
   texture_resolution?: string;
   hd_texture?: boolean;
   image_enhancement?: boolean;
@@ -144,7 +148,7 @@ export interface RemeshApiRequest {
 
 // Retexture API request body
 export interface RetextureApiRequest {
-  enable_original_uv: boolean;
+  enable_original_uv?: boolean;
   enable_pbr: boolean;
   input_task_id?: string;
   model_url?: string;
@@ -186,7 +190,6 @@ export interface UvUnwrapApiRequest {
 // Creative Lab API request bodies (POST /openapi/creative-lab/<product>/v1/{prototype|build})
 export interface CreativeLabPrototypeApiRequest {
   image_url?: string;
-  text?: string;
   image_subject?: string;
   name?: string;
 }
@@ -266,7 +269,7 @@ export interface TextToImageApiRequest {
   ai_model: string;
   prompt: string;
   generate_multi_view: boolean;
-  aspect_ratio: string;
+  aspect_ratio?: string;
   pose_mode?: string;
 }
 

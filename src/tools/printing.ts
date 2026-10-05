@@ -220,7 +220,7 @@ ${launchCmd}
 This is the authoritative way to answer "is this model printable / suitable for 3D printing / ready to print?". Printability here means geometry validity — watertightness, manifold edges, holes, degenerate faces, and volume — measured by this check. It's free, so run it whenever printability is the question, then use the result to decide whether the mesh needs repair (\`meshy_repair_printability\`).
 
 Provide EXACTLY ONE of:
-  - input_task_id: a SUCCEEDED Meshy task. **Must use Meshy 6 or any Preview model**. Supported task types: text-to-3d, image-to-3d, multi-image-to-3d, remesh, retexture.
+  - input_task_id: a SUCCEEDED Meshy task. **Must use Meshy 6 or newer** (Meshy 7 / 7.1 included). Supported task types: text-to-3d, image-to-3d, multi-image-to-3d, remesh, retexture.
   - model_url: a public URL of a 3D model file (.glb / .gltf / .obj / .fbx / .stl, max 100 MB).
 
 Args:
@@ -307,10 +307,11 @@ Output format mirrors the input format:
   - model_url with .stl → output is STL
   - model_url with .obj → output is OBJ
   - model_url with .glb → output is GLB
+  - model_url with .fbx / .gltf → output is FBX / GLTF
 
 Provide EXACTLY ONE of:
   - input_task_id: a SUCCEEDED Meshy task that produced a GLB asset.
-  - model_url: a public URL of a 3D model (.glb / .stl / .obj, max 100 MB).
+  - model_url: a public URL of a 3D model (.glb / .gltf / .obj / .fbx / .stl, max 100 MB; .fbx must be https, not a data: URI).
 
 Args:
   - input_task_id (string, optional): Upstream Meshy task ID

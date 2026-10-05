@@ -46,21 +46,23 @@ export enum ModelFormat {
 
 // AI Models
 //
-// IMPORTANT — the accepted set differs PER ENDPOINT, so do not assume one enum
-// covers everything (verified against the API 2026-08-11):
-//   image-to-3d / multi-image-to-3d / retexture → meshy-5, meshy-6, meshy-7, latest
-//   text-to-3d (v2)                             → meshy-5, meshy-6, latest  (NO meshy-7)
-// `latest` also resolves differently: it is Meshy 7 on image-to-3d /
-// multi-image-to-3d / retexture, but still Meshy 6 on text-to-3d.
+// Generation endpoints (text / image / multi-image) take meshy-6-lite, meshy-6,
+// meshy-7.1 and latest (= Meshy 7.1). Retexture takes meshy-6-lite, meshy-6,
+// meshy-7 and latest (= Meshy 7) — no meshy-7.1 there. meshy-7 is deprecated on
+// generation (use meshy-7.1). meshy-5 is deprecated: the API serves it as
+// meshy-6-lite until it retires on 2026-10-10. Keep endpoint-specific
+// restrictions in each schema.
 export enum AIModel {
   MESHY_5 = "meshy-5",
+  MESHY_6_LITE = "meshy-6-lite",
   MESHY_6 = "meshy-6",
   MESHY_7 = "meshy-7",
+  MESHY_7_1 = "meshy-7.1",
   LATEST = "latest"
 }
 
 // Smart Topology models — selected via model_type: "smart-topology" on
-// image-to-3d. meshy-t2 is the default and adds native part separation with a
+// image-to-3d or text preview (T2 only). meshy-t2 adds native part separation with a
 // configurable target_polycount; meshy-t1 is the previous generation.
 export enum SmartTopologyModel {
   MESHY_T1 = "meshy-t1",
@@ -183,18 +185,20 @@ export enum OriginAt {
 // Text-to-Image / Image-to-Image Models
 // Credits differ by model and by endpoint:
 //   nano-banana: 3 | nano-banana-2: 6 | nano-banana-pro: 9
-//   gpt-image-2: 9 (text-to-image) / 12 (image-to-image); aspect-ratio support is limited.
+//   GPT Image models (gpt-image-2, gpt-image-2-5-flare, gpt-image-2-5-sunburst):
+//   9 (text-to-image) / 12 (image-to-image).
 export enum TextToImageModel {
   NANO_BANANA = "nano-banana",
   NANO_BANANA_2 = "nano-banana-2",
   NANO_BANANA_PRO = "nano-banana-pro",
-  GPT_IMAGE_2 = "gpt-image-2"
+  GPT_IMAGE_2 = "gpt-image-2",
+  GPT_IMAGE_2_5_FLARE = "gpt-image-2-5-flare",
+  GPT_IMAGE_2_5_SUNBURST = "gpt-image-2-5-sunburst"
 }
 
 // Aspect Ratios
-// Model support differs: nano-banana / nano-banana-2 / nano-banana-pro accept
-// 1:1, 16:9, 9:16, 4:3, 3:4. gpt-image-2 accepts ONLY 1:1, 3:2, 2:3 (and 3:2/2:3
-// are gpt-image-2-only — the nano-banana family rejects them).
+// nano-banana / nano-banana-2 / nano-banana-pro accept 1:1, 16:9, 9:16, 4:3, 3:4.
+// The GPT Image models accept all of those plus 3:2 and 2:3 (GPT-only).
 export enum AspectRatio {
   SQUARE = "1:1",
   WIDESCREEN = "16:9",
@@ -236,22 +240,26 @@ export const CONVERT_CREDITS = 1;
 export const RESIZE_CREDITS = 1;
 export const UV_UNWRAP_CREDITS = 5;
 
-// Creative Lab credit costs. Six of the seven products share 6 + 30 = 36.
-// Keycap is the exception: its prototype renders two images per candidate
-// (12 credits) and its build carries the base-plate generation (50) → 62 total.
+// Creative Lab credit costs (prototype + build). Most products are 6 + 30 = 36.
+// Keycap is 12 + 50 = 62. Lamp is 30 + 6 = 36: its prototype builds the
+// lampshade model and the build only adds the base plate.
 export const CREATIVE_LAB_PROTOTYPE_CREDITS = 6;
 export const CREATIVE_LAB_BUILD_CREDITS = 30;
 export const CREATIVE_LAB_KEYCAP_PROTOTYPE_CREDITS = 12;
 export const CREATIVE_LAB_KEYCAP_BUILD_CREDITS = 50;
+export const CREATIVE_LAB_LAMP_PROTOTYPE_CREDITS = 30;
+export const CREATIVE_LAB_LAMP_BUILD_CREDITS = 6;
 
 /** Per-product (prototype, build) credit cost. */
 export function creativeLabCredits(product: CreativeLabProduct): { prototype: number; build: number; total: number } {
-  const prototype = product === CreativeLabProduct.KEYCAP
-    ? CREATIVE_LAB_KEYCAP_PROTOTYPE_CREDITS
-    : CREATIVE_LAB_PROTOTYPE_CREDITS;
-  const build = product === CreativeLabProduct.KEYCAP
-    ? CREATIVE_LAB_KEYCAP_BUILD_CREDITS
-    : CREATIVE_LAB_BUILD_CREDITS;
+  if (product === CreativeLabProduct.KEYCAP) {
+    return { prototype: CREATIVE_LAB_KEYCAP_PROTOTYPE_CREDITS, build: CREATIVE_LAB_KEYCAP_BUILD_CREDITS, total: CREATIVE_LAB_KEYCAP_PROTOTYPE_CREDITS + CREATIVE_LAB_KEYCAP_BUILD_CREDITS };
+  }
+  if (product === CreativeLabProduct.LAMP) {
+    return { prototype: CREATIVE_LAB_LAMP_PROTOTYPE_CREDITS, build: CREATIVE_LAB_LAMP_BUILD_CREDITS, total: CREATIVE_LAB_LAMP_PROTOTYPE_CREDITS + CREATIVE_LAB_LAMP_BUILD_CREDITS };
+  }
+  const prototype = CREATIVE_LAB_PROTOTYPE_CREDITS;
+  const build = CREATIVE_LAB_BUILD_CREDITS;
   return { prototype, build, total: prototype + build };
 }
 
@@ -259,7 +267,8 @@ export function creativeLabCredits(product: CreativeLabProduct): { prototype: nu
 export const TEXTURE_CREDITS = 10;
 export const TEXTURE_8K_CREDITS = 15;
 
-// Meshy 7 `ultra_mode` stage-3 surcharge (single image-to-3d only).
+// Ultra geometry surcharge: geometry_resolution "2k" or "4k" (and the
+// deprecated ultra_mode) on meshy-7.1 / latest.
 export const ULTRA_MODE_SURCHARGE_CREDITS = 5;
 
 // UV Unwrap face-count ceiling (oversized meshes are rejected with a 400 — remesh first)

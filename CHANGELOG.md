@@ -1,5 +1,60 @@
 # Changelog
 
+## [0.6.0] - 2026-10-05
+
+Sync with the public Meshy API as of 2026-10-05 (docs, pricing page and changelog). Builds on
+[#10](https://github.com/meshy-dev/meshy-mcp-server/pull/10) by @reefbarman (Meshy 7.1, Smart
+Topology on text, `geometry_resolution`, offline request tests).
+
+### Added
+
+- **Meshy 7.1**: `ai_model: "meshy-7.1"` on `meshy_text_to_3d`, `meshy_image_to_3d`,
+  `meshy_multi_image_to_3d` and `meshy_text_to_3d_refine`. `latest` now means Meshy 7.1 on all
+  of them, text-to-3d included (it was still described as Meshy 6)
+- **`geometry_resolution`** (`standard` / `2k` / `4k`): the Ultra geometry pass, +5 credits for
+  2k or 4k, Meshy 7.1 / `latest` only. Multi-image takes `2k` but not `4k`. `ultra_mode` is
+  deprecated and maps to `2k`
+- **`meshy-6-lite`** on every generation endpoint and on `meshy_retexture`: 5 credits for the
+  mesh, 15 textured, 2K textures only. 4K/8K and `lowpoly` are rejected locally
+- **Smart Topology on text-to-3d**: `model_type: "smart-topology"` + `ai_model: "meshy-t2"`
+  (5 credits, 100–15,000 faces, triangle only)
+- **`texture_image_urls`** on `meshy_multi_image_to_3d`: 1–4 views of the same object drive the
+  texture (Meshy 7.1 / `latest`)
+- **GPT Image 2.5**: `gpt-image-2-5-flare` and `gpt-image-2-5-sunburst` on text-to-image and
+  image-to-image
+- `npm test`: offline request-body tests for generation, retexture, image and Creative Lab
+  (no API key or credits needed), now run in CI
+
+### Changed
+
+- Refine leaves `ai_model` unset by default so it inherits the preview's model
+- Server instructions and README carry the current pricing table again (Meshy 7.1 / 6 / 6-lite /
+  T2, Ultra surcharge, Creative Lab lamp split)
+- Prompt limits raised to the API's 800 characters (text-to-3d prompt, texture prompts,
+  retexture `text_style_prompt`)
+- `meshy_retexture`: `enable_original_uv` still defaults to `true` for `input_task_id` (Meshy
+  UVs are reused, as before), but is no longer forced on `model_url` uploads, which now take the
+  API default `false` (fresh unwrap). `remove_lighting` is only sent for `meshy-6`
+- `meshy_analyze_printability` accepts any Meshy 6-or-newer task (Meshy 7 / 7.1 included); the
+  old text said "Meshy 6 or any Preview model"
+- `meshy_repair_printability` documents that `.fbx` / `.gltf` input comes back as `.fbx` / `.gltf`
+
+### Fixed
+
+- `meshy_retexture` with `multiview_image_urls` and the default `latest` model now sends
+  `ai_model: "meshy-7"`. The API requires that explicit id, so these calls used to 400
+- `meshy_text_to_image` with `generate_multi_view: true` no longer sends the default
+  `aspect_ratio: "1:1"`. The API rejects that combination, so every multi-view call used to 400
+- `meshy_multi_image_to_3d` forwards `remove_lighting` for an explicit `meshy-7.1` too, not just
+  `meshy-6` / `latest`
+- `meshy_creative_lab`: lamp no longer accepts `text` (the API removed it, so these calls
+  400'd), and lamp is billed 30 + 6, not 6 + 30
+
+### Deprecated
+
+- `meshy-5`: still accepted (the API serves it as `meshy-6-lite`, 2K textures only) but no longer
+  advertised. The API retires it on 2026-10-10; use `meshy-6-lite`
+
 ## [0.5.2] - 2026-09-22
 
 ### Fixed
