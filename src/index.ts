@@ -44,8 +44,8 @@ const server = new McpServer(
  */
 async function initializeServer() {
   try {
-    // Create and validate Meshy API client
-    const meshyClient = await createMeshyClient();
+    // Create Meshy API client (the key is checked on the first tool call)
+    const meshyClient = createMeshyClient();
     console.error("✓ Meshy client initialized");
 
     // Register all tools

@@ -21,10 +21,38 @@ export interface ErrorContext {
 }
 
 /**
+ * MESHY_API_KEY is missing or was rejected by the API (401).
+ *
+ * The server stays up when the key is bad: every tool returns this message
+ * instead, so the user sees it in the chat. Exiting would make MCP hosts
+ * restart the server in a loop (ENG-3924).
+ */
+export class MeshyAuthError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "MeshyAuthError";
+  }
+}
+
+export const MISSING_API_KEY_MESSAGE =
+  "MESHY_API_KEY environment variable is required. Put it in the \"env\" block of your " +
+  "MCP client config (not in \"args\"), then restart the Meshy MCP server. " +
+  "Get your API key from https://www.meshy.ai/settings/api";
+
+export const INVALID_API_KEY_MESSAGE =
+  "Authentication failed: the Meshy API rejected MESHY_API_KEY (401). The key is mistyped, " +
+  "revoked or expired. Create a new key at https://www.meshy.ai/settings/api, update the " +
+  "MCP client config, then restart the Meshy MCP server.";
+
+/**
  * Handle Meshy API errors and convert to user-friendly messages.
  * When context is provided, appends tool-specific recovery suggestions.
  */
 export function handleMeshyError(error: unknown, context?: ErrorContext): string {
+  if (error instanceof MeshyAuthError) {
+    return `Error: ${error.message}`;
+  }
+
   // Handle Axios errors
   if (error instanceof AxiosError) {
     if (error.response) {
@@ -72,7 +100,7 @@ export function handleMeshyError(error: unknown, context?: ErrorContext): string
         }
 
         case 401:
-          return "Error: Authentication failed. Please check your MESHY_API_KEY is valid.";
+          return `Error: ${INVALID_API_KEY_MESSAGE}`;
 
         case 403:
           return "Error: Permission denied. Your API key may not have access to this resource.";

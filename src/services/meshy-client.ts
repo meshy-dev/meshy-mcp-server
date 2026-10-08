@@ -2,17 +2,27 @@
  * Meshy API client with authentication and error handling
  */
 
-import axios, { AxiosInstance, AxiosRequestConfig } from "axios";
+import axios, { AxiosError, AxiosInstance, AxiosRequestConfig } from "axios";
 import { API_BASE_URL, API_TIMEOUT, RETRY_DELAYS, MAX_RETRIES } from "../constants.js";
-import { isRetryableError, isRateLimitError } from "./error-handler.js";
+import {
+  isRetryableError,
+  isRateLimitError,
+  MeshyAuthError,
+  MISSING_API_KEY_MESSAGE,
+  INVALID_API_KEY_MESSAGE
+} from "./error-handler.js";
 import { GetTaskResponse } from "../types.js";
 import { USER_AGENT } from "../version.js";
 
 export class MeshyClient {
   private client: AxiosInstance;
-  private apiKey: string;
+  private apiKey: string | undefined;
+  // Set once the API answers 401. The key comes from the environment and cannot
+  // change while the process runs, so later calls fail locally instead of
+  // sending more requests that are bound to be rejected.
+  private keyRejected = false;
 
-  constructor(apiKey: string) {
+  constructor(apiKey: string | undefined) {
     this.apiKey = apiKey;
 
     this.client = axios.create({
@@ -71,10 +81,22 @@ export class MeshyClient {
     config: AxiosRequestConfig,
     retryCount = 0
   ): Promise<T> {
+    if (!this.apiKey) {
+      throw new MeshyAuthError(MISSING_API_KEY_MESSAGE);
+    }
+    if (this.keyRejected) {
+      throw new MeshyAuthError(INVALID_API_KEY_MESSAGE);
+    }
+
     try {
       const response = await this.client.request<T>(config);
       return response.data;
     } catch (error) {
+      if (error instanceof AxiosError && error.response?.status === 401) {
+        this.keyRejected = true;
+        throw new MeshyAuthError(INVALID_API_KEY_MESSAGE);
+      }
+
       // Check if we should retry
       const shouldRetry =
         retryCount < MAX_RETRIES &&
@@ -102,20 +124,6 @@ export class MeshyClient {
    */
   private sleep(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
-  }
-
-  /**
-   * Validate API key by making a test request
-   */
-  async validateApiKey(): Promise<boolean> {
-    try {
-      // Make a simple request to check if API key is valid
-      // Use the text-to-3d endpoint which returns a list of tasks
-      await this.get("/openapi/v2/text-to-3d");
-      return true;
-    } catch (error) {
-      return false;
-    }
   }
 }
 
@@ -147,7 +155,9 @@ export async function fetchTaskByIdFromKnownEndpoints(
       if (task && task.id) {
         return { task, endpoint };
       }
-    } catch {
+    } catch (error) {
+      // A bad key fails on every endpoint; report it, not "task not found"
+      if (error instanceof MeshyAuthError) throw error;
       // Not found on this endpoint, try next
       continue;
     }
@@ -171,7 +181,8 @@ export async function getTaskWithAutoInference(
     if (task && task.id) {
       return { task, endpoint: preferredEndpoint };
     }
-  } catch {
+  } catch (error) {
+    if (error instanceof MeshyAuthError) throw error;
     // Fall through to auto-inference
   }
 
@@ -185,31 +196,19 @@ export async function getTaskWithAutoInference(
 }
 
 /**
- * Create and validate Meshy client
+ * Create the Meshy client.
+ *
+ * The key is not probed at startup and a missing key does not stop the server:
+ * MCP hosts restart a server that exits, so failing here turned every install
+ * with a bad key into a restart loop hitting the API (ENG-3924). Instead each
+ * tool call returns the auth error, which the user sees in the chat.
  */
-export async function createMeshyClient(): Promise<MeshyClient> {
-  const apiKey = process.env.MESHY_API_KEY;
+export function createMeshyClient(): MeshyClient {
+  const apiKey = process.env.MESHY_API_KEY?.trim();
 
   if (!apiKey) {
-    throw new Error(
-      "MESHY_API_KEY environment variable is required. " +
-      "Get your API key from https://www.meshy.ai/settings/api"
-    );
+    console.error(`Warning: ${MISSING_API_KEY_MESSAGE}`);
   }
 
-  const client = new MeshyClient(apiKey);
-
-  // Validate API key on startup
-  console.error("Validating Meshy API key...");
-  const isValid = await client.validateApiKey();
-
-  if (!isValid) {
-    throw new Error(
-      "Invalid MESHY_API_KEY. Please check your API key is correct. " +
-      "Get your API key from https://www.meshy.ai/settings/api"
-    );
-  }
-
-  console.error("✓ Meshy API key validated successfully");
-  return client;
+  return new MeshyClient(apiKey);
 }

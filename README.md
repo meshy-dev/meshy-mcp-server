@@ -152,11 +152,11 @@ Most clients auto-load the new server, but **Cursor and VS Code require a manual
 
 ## Troubleshooting
 
-- **`MESHY_API_KEY environment variable is required`** — the key didn't reach the server. Make sure it sits inside an `"env": {...}` block in your `mcp.json`, not in `args`.
+- **`MESHY_API_KEY environment variable is required`** — returned by every tool when the key didn't reach the server. Make sure it sits inside an `"env": {...}` block in your `mcp.json`, not in `args`. Restart the server after fixing it.
 - **`spawn npx ENOENT`** (Windows) — wrap with `cmd /c` (see Cursor block above).
 - **`error: unknown option '-y'`** (Claude Code on Windows) — use `claude mcp add-json` instead of `claude mcp add … -- npx -y …`.
 - **Cursor doesn't list `meshy`** — make sure `mcp.json` is valid JSON (no trailing commas), then fully restart Cursor.
-- **Tool calls return 401** — the API key is invalid or revoked. Regenerate at https://www.meshy.ai/settings/api.
+- **`Authentication failed: the Meshy API rejected MESHY_API_KEY (401)`** — the key is mistyped, revoked or expired. Regenerate at https://www.meshy.ai/settings/api, update your config and restart the server.
 
 ## Configuration
 

@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.6.1] - 2026-10-08
+
+### Fixed
+
+- **No more restart loop on a bad `MESHY_API_KEY`** (ENG-3924). The server no longer probes the
+  key at startup (it listed text-to-3d tasks on every launch) and no longer exits when the key is
+  missing or rejected. MCP hosts restarted the exited server on each tool use, so a broken install
+  kept re-sending the probe; about 35k 401s a day came from this. The server now always starts,
+  and every tool returns the auth error, so it shows up in the chat instead of the host's log
+- After the API answers 401, later tool calls fail with the same message without sending more
+  requests (the key cannot change while the server runs)
+- `meshy_get_task_status`, `meshy_cancel_task`, `meshy_download_model` and `meshy_rig` report
+  an auth error instead of trying every task endpoint and saying "task not found"
+- Network errors, timeouts and 5xx at startup no longer show up as "Invalid MESHY_API_KEY"
+
 ## [0.6.0] - 2026-10-05
 
 Sync with the public Meshy API as of 2026-10-05 (docs, pricing page and changelog). Builds on
