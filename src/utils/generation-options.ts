@@ -74,8 +74,8 @@ export function resolveGenerationOptions(options: GenerationOptions, endpoint: G
 
 const isMeshy71 = (model?: string) => model === AIModel.MESHY_7_1 || model === AIModel.LATEST;
 
-/** meshy-6-lite (and deprecated meshy-5, served as meshy-6-lite): 2K textures only. */
-export const isLiteModel = (model?: string) => model === AIModel.MESHY_5 || model === AIModel.MESHY_6_LITE;
+/** meshy-6-lite: 2K textures only. */
+export const isLiteModel = (model?: string) => model === AIModel.MESHY_6_LITE;
 
 /** image_enhancement is honored on meshy-6, meshy-7.1 and latest. */
 export const supportsImageEnhancement = (model?: string) => model === AIModel.MESHY_6 || isMeshy71(model);

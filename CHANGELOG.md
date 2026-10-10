@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.6.2] - 2026-10-10
+
+### Removed
+
+- `meshy-5` has been retired and removed. `ai_model: "meshy-5"` is no longer accepted
+
 ## [0.6.1] - 2026-10-08
 
 ### Fixed

@@ -51,7 +51,7 @@
 | `meshy_multi_image_to_3d` | `meshy-7.1`, `meshy-6`, `meshy-6-lite`, `latest` (no Smart Topology) | Meshy 7.1 |
 | `meshy_retexture` | `meshy-7`, `meshy-6`, `meshy-6-lite`, `latest` (no `meshy-7.1`) | Meshy 7 |
 
-Legacy ids still accepted: `meshy-7` on generation (deprecated, billed like `meshy-7.1`) and single-image `meshy-t1`. `meshy-5` is deprecated (served as `meshy-6-lite`) and retires on 2026-10-10: use `meshy-6-lite`.
+Legacy ids still accepted: `meshy-7` on generation (deprecated, billed like `meshy-7.1`) and single-image `meshy-t1`. `meshy-5` is retired and no longer accepted.
 
 Generation cost ([pricing](https://docs.meshy.ai/en/api/pricing)):
 

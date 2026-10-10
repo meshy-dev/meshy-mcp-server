@@ -76,9 +76,9 @@ export const RetextureInputSchema = z.object({
     .max(4, "At most 4 views are accepted")
     .optional()
     .describe("1–4 ordered views OF THE SAME OBJECT (not style references) — element 0 is the primary reference and alone drives the metallic/roughness prediction. Runs on Meshy 7 (the tool sends ai_model 'meshy-7' for you when ai_model is 'latest'). Mutually exclusive with text_style_prompt and image_style_url."),
-  ai_model: z.enum([AIModel.MESHY_6_LITE, AIModel.MESHY_6, AIModel.MESHY_7, AIModel.LATEST, AIModel.MESHY_5])
+  ai_model: z.enum([AIModel.MESHY_6_LITE, AIModel.MESHY_6, AIModel.MESHY_7, AIModel.LATEST])
     .default(AIModel.LATEST)
-    .describe("AI model: 'latest' (default, = Meshy 7), 'meshy-7', 'meshy-6', or 'meshy-6-lite' (fast, 2K textures only). No meshy-7.1 on retexture. 'meshy-5' is deprecated and retires 2026-10-10 (use meshy-6-lite). multiview_image_urls needs Meshy 7. Texturing costs 10 credits at 2K/4K, 15 at 8K."),
+    .describe("AI model: 'latest' (default, = Meshy 7), 'meshy-7', 'meshy-6', or 'meshy-6-lite' (fast, 2K textures only). No meshy-7.1 on retexture. multiview_image_urls needs Meshy 7. Texturing costs 10 credits at 2K/4K, 15 at 8K."),
   enable_original_uv: z.boolean()
     .optional()
     .describe("Keep the model's existing UV layout instead of unwrapping fresh UVs. Default: true with input_task_id (Meshy-generated UVs are reused), API default false with model_url (fresh unwrap, safest for uploads without good UVs)."),

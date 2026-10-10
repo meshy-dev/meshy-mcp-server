@@ -74,10 +74,10 @@ export const TextTo3DInputSchema = z.object({
   prompt: GenerationPromptSchema,
   ai_model: z.enum([
     AIModel.LATEST, AIModel.MESHY_7_1, AIModel.MESHY_6, AIModel.MESHY_6_LITE,
-    AIModel.MESHY_7, AIModel.MESHY_5, SmartTopologyModel.MESHY_T2
+    AIModel.MESHY_7, SmartTopologyModel.MESHY_T2
   ])
     .optional()
-    .describe("Standard (model_type standard): 'latest' (default, = Meshy 7.1) or 'meshy-7.1' = best quality, 20 credits; 'meshy-6' = 20 credits; 'meshy-6-lite' = fast and cheap, 5 credits. 'meshy-7' is deprecated (use meshy-7.1); 'meshy-5' is deprecated and retires 2026-10-10 (use meshy-6-lite). Smart Topology (model_type smart-topology): 'meshy-t2' = clean part-separated triangle mesh at a set face count, 5 credits. Omitted ai_model defaults to latest, or to meshy-t2 under smart-topology. IMPORTANT: ask the user which model to use and confirm the cost first."),
+    .describe("Standard (model_type standard): 'latest' (default, = Meshy 7.1) or 'meshy-7.1' = best quality, 20 credits; 'meshy-6' = 20 credits; 'meshy-6-lite' = fast and cheap, 5 credits. 'meshy-7' is deprecated (use meshy-7.1). Smart Topology (model_type smart-topology): 'meshy-t2' = clean part-separated triangle mesh at a set face count, 5 credits. Omitted ai_model defaults to latest, or to meshy-t2 under smart-topology. IMPORTANT: ask the user which model to use and confirm the cost first."),
   model_type: z.nativeEnum(ModelType)
     .optional()
     .describe("standard (default), smart-topology (T2, triangle-only), or deprecated lowpoly. Smart Topology ignores remesh and adaptive-decimation controls."),
