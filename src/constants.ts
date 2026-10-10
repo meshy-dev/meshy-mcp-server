@@ -49,11 +49,9 @@ export enum ModelFormat {
 // Generation endpoints (text / image / multi-image) take meshy-6-lite, meshy-6,
 // meshy-7.1 and latest (= Meshy 7.1). Retexture takes meshy-6-lite, meshy-6,
 // meshy-7 and latest (= Meshy 7) — no meshy-7.1 there. meshy-7 is deprecated on
-// generation (use meshy-7.1). meshy-5 is deprecated: the API serves it as
-// meshy-6-lite until it retires on 2026-10-10. Keep endpoint-specific
-// restrictions in each schema.
+// generation (use meshy-7.1). Keep endpoint-specific restrictions in each
+// schema.
 export enum AIModel {
-  MESHY_5 = "meshy-5",
   MESHY_6_LITE = "meshy-6-lite",
   MESHY_6 = "meshy-6",
   MESHY_7 = "meshy-7",

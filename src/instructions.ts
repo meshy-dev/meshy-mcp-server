@@ -37,7 +37,7 @@ Before calling ANY tool that costs credits, present the cost and wait for user c
 | meshy-t2 (smart-topology, single-image only) | 5 | 15 | 20 |
 
 Ultra geometry (geometry_resolution "2k" or "4k", or the deprecated ultra_mode) adds **+5** on meshy-7.1 / latest. Multi-image takes "2k" but not "4k".
-Legacy ids: meshy-7 is deprecated and billed like meshy-7.1; meshy-5 retires on 2026-10-10 (use meshy-6-lite); model_type "lowpoly" is billed like meshy-6 and retires on 2026-10-30 (use smart-topology + meshy-t2).
+Legacy ids: meshy-7 is deprecated and billed like meshy-7.1; meshy-5 is retired and not accepted (use meshy-6-lite); model_type "lowpoly" is billed like meshy-6 and retires on 2026-10-30 (use smart-topology + meshy-t2).
 texture_resolution "8k" costs 5 more than 2K/4K — always confirm it explicitly.
 
 ### Current generation routing

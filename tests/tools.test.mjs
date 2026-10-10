@@ -82,7 +82,7 @@ test("retexture keeps Meshy UVs by default, leaves uploads and lighting to the A
   assert.equal(meshy6.enable_original_uv, true);
 });
 
-test("retexture accepts meshy-6-lite and still takes deprecated meshy-5", async () => {
+test("retexture accepts meshy-6-lite and rejects retired meshy-5", async () => {
   const h = createHarness(registerPostProcessingTools);
   const { body } = await h.call("meshy_retexture", {
     input_task_id: "offline",
@@ -94,14 +94,13 @@ test("retexture accepts meshy-6-lite and still takes deprecated meshy-5", async 
   assert.equal("remove_lighting" in body, false);
   assert.equal(
     h.schema("meshy_retexture").safeParse({ input_task_id: "x", text_style_prompt: "x", ai_model: "meshy-5" }).success,
-    true,
+    false,
   );
 });
 
 for (const [label, input] of [
   ["multi-view on meshy-6", { input_task_id: "x", ai_model: "meshy-6", multiview_image_urls: ["https://example.invalid/a.png"] }],
   ["8k on meshy-6-lite", { input_task_id: "x", ai_model: "meshy-6-lite", text_style_prompt: "x", texture_resolution: "8k" }],
-  ["4k on meshy-5", { input_task_id: "x", ai_model: "meshy-5", text_style_prompt: "x", texture_resolution: "4k" }],
 ]) {
   test(`retexture rejects ${label} before posting`, async () => {
     const { invalid } = createHarness(registerPostProcessingTools);
