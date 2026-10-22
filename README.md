@@ -137,6 +137,13 @@ claude mcp add-json meshy '{"command":"npx","args":["-y","@meshy-ai/meshy-mcp-se
 </details>
 
 <details>
+<summary><b>CoWork OS</b></summary>
+
+[CoWork OS](https://github.com/CoWork-OS/CoWork-OS) ships Meshy as a built-in connector, pinned to a reviewed version of this server. Open **Settings → Connectors → Meshy**, click **Install & Connect** and paste your API key — no `mcp.json` needed. Models show in the chat as interactive 3D cards, and every credit-spending call shows its estimated cost on the approval card first.
+
+</details>
+
+<details>
 <summary><b>Other clients</b> (Windsurf, Claude Desktop, Codex, VS Code, Cline…)</summary>
 
 Use **Option 1** — `add-mcp` writes the correct config for each.
@@ -155,6 +162,7 @@ Most clients auto-load the new server, but **Cursor and VS Code require a manual
 | **Windsurf** | Refresh in the Cascade panel's MCP section | `List the meshy tools available` |
 | **VS Code** | Run command `MCP: List Servers` → click `meshy` → **Start** | `List the meshy tools available` |
 | **Codex** | Nothing — auto-loads on next session | `List the meshy tools available` |
+| **CoWork OS** | Built in: `Settings` → `Connectors` → `Meshy` → **Install & Connect**, paste your key (no `mcp.json` needed) | `Make a low-poly treasure chest and show it in 3D` |
 
 ## Troubleshooting
 
