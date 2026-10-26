@@ -17,7 +17,7 @@ const SERVER = fileURLToPath(new URL("../dist/index.js", import.meta.url));
 const HERMES = { name: "hermes-agent", version: "0.22.2" };
 
 test("leading token is meshy-mcp-server/<package version>", () => {
-  assert.equal(BASE, "meshy-mcp-server/0.6.5");
+  assert.equal(BASE, "meshy-mcp-server/0.6.6");
   for (const ua of [
     userAgent(),
     userAgent(HERMES),
