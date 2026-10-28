@@ -27,7 +27,7 @@ export function resolveGenerationOptions(options: GenerationOptions, endpoint: G
   if (isSmartModel && !smartTopology) {
     throw new RequestValidationError("Smart Topology models require model_type smart-topology.");
   }
-  if (smartTopology && (endpoint === "multi-image" || (endpoint === "text" && model === SmartTopologyModel.MESHY_T1))) {
+  if (smartTopology && endpoint === "multi-image") {
     throw new RequestValidationError("meshy-t2 / meshy-t2.5 Smart Topology is supported on text preview and single-image generation only.");
   }
   const maxFaces = SMART_TOPOLOGY_MAX_FACES[model];
@@ -36,9 +36,6 @@ export function resolveGenerationOptions(options: GenerationOptions, endpoint: G
   }
   if (smartTopology && endpoint === "text" && options.topology === "quad") {
     throw new RequestValidationError("Smart Topology text preview accepts triangle topology only.");
-  }
-  if (modelType === ModelType.LOWPOLY && isLiteModel(model)) {
-    throw new RequestValidationError("meshy-6-lite does not support model_type lowpoly. Use model_type smart-topology with ai_model meshy-t2 instead.");
   }
   if (options.ultra_mode && options.geometry_resolution !== undefined && options.geometry_resolution !== "2k") {
     throw new RequestValidationError("ultra_mode true conflicts with geometry_resolution; use 2k or omit the deprecated flag.");
@@ -53,7 +50,7 @@ export function resolveGenerationOptions(options: GenerationOptions, endpoint: G
     ? undefined : requestedResolution;
   if ((geometryResolution !== undefined && geometryResolution !== "standard") || legacyUltra) {
     if (modelType !== ModelType.STANDARD) {
-      throw new RequestValidationError("Geometry resolution and Ultra require standard generation, not Smart Topology or lowpoly.");
+      throw new RequestValidationError("Geometry resolution and Ultra require standard generation, not Smart Topology.");
     }
     if (!legacyUltra && !isMeshy71(model)) {
       throw new RequestValidationError("geometry_resolution requires ai_model meshy-7.1 or latest.");
