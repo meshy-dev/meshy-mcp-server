@@ -57,7 +57,7 @@
 | `meshy_multi_image_to_3d` | `meshy-7.1`, `meshy-6`, `meshy-6-lite`, `latest` (no Smart Topology) | Meshy 7.1 |
 | `meshy_retexture` | `meshy-7`, `meshy-6`, `meshy-6-lite`, `latest` (no `meshy-7.1`) | Meshy 7 |
 
-Legacy ids still accepted: `meshy-7` on generation (deprecated, billed like `meshy-7.1`) and single-image `meshy-t1` (deprecated; use `meshy-t2`). `meshy-5` is retired and no longer accepted.
+Legacy id still accepted: `meshy-7` on generation (deprecated, billed like `meshy-7.1`). `meshy-5` and Meshy T1 (`meshy-t1`, `model_type: "lowpoly"`) are retired and no longer accepted; use `meshy-6-lite` and `smart-topology` + `meshy-t2.5`.
 
 Generation cost ([pricing](https://docs.meshy.ai/en/api/pricing)):
 
@@ -68,7 +68,7 @@ Generation cost ([pricing](https://docs.meshy.ai/en/api/pricing)):
 | `meshy-6-lite` | 5 | 15 | — (2K only) |
 | `meshy-t2` / `meshy-t2.5` (smart-topology, single-image) | 5 | 15 | 20 |
 
-Text-to-3D preview is billed mesh-only; refine adds 10 (15 at 8K). `geometry_resolution: "2k"` or `"4k"` (Ultra pass, Meshy 7.1 / `latest`) adds **+5**; multi-image supports `"2k"` only. `ultra_mode` is deprecated and maps to `"2k"`. `model_type: "lowpoly"` retires on 2026-10-30: use `smart-topology` + `meshy-t2`.
+Text-to-3D preview is billed mesh-only; refine adds 10 (15 at 8K). `geometry_resolution: "2k"` or `"4k"` (Ultra pass, Meshy 7.1 / `latest`) adds **+5**; multi-image supports `"2k"` only. `ultra_mode` is deprecated and maps to `"2k"`.
 
 Smart Topology generates directly at `target_polycount` and skips remeshing: `meshy-t2` 100–15,000 faces (default 4,000), `meshy-t2.5` 100–30,000 (default 15,000). Without `ai_model`, `model_type: "smart-topology"` uses `meshy-t2`. Output is triangle-only. For standard models, `target_polycount` needs `should_remesh: true` and is overridden by `decimation_mode`.
 

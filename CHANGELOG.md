@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.6.7] - 2026-10-30
+
+### Removed
+
+- Meshy T1 is retired: `meshy_image_to_3d` no longer accepts `ai_model: "meshy-t1"`, and
+  `meshy_text_to_3d` / `meshy_image_to_3d` no longer accept `model_type: "lowpoly"`. Both are
+  refused locally, before any request or charge. Use `model_type: "smart-topology"` with
+  `ai_model: "meshy-t2.5"` (or `meshy-t2`). `meshy_multi_image_to_3d` still ignores its deprecated
+  `model_type`, `lowpoly` included, and never sends it
+
 ## [0.6.6] - 2026-10-25
 
 ### Changed

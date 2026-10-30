@@ -139,12 +139,6 @@ for (const [label, options, endpoint, message] of [
     /supported on text preview and single-image/,
   ],
   [
-    "text T1",
-    { ai_model: "meshy-t1" },
-    "text",
-    /supported on text preview and single-image/,
-  ],
-  [
     "T2 over face limit",
     { ai_model: "meshy-t2", target_polycount: 15001 },
     "text",
@@ -358,14 +352,8 @@ test("image T2 omits topology, remesh, decimation, and pre-remesh controls", asy
   }
 });
 
-test("legacy image T1 and Meshy 7 Ultra remain usable", async () => {
+test("legacy Meshy 7 Ultra remains usable", async () => {
   const { call } = createHarness();
-  const { body: t1 } = await call("meshy_image_to_3d", {
-    input_task_id: "offline-image",
-    ai_model: "meshy-t1",
-  });
-  assert.equal(t1.ai_model, "meshy-t1");
-  assert.equal(t1.model_type, "smart-topology");
   const { body: ultra } = await call("meshy_image_to_3d", {
     input_task_id: "offline-image",
     ai_model: "meshy-7",
@@ -453,7 +441,6 @@ for (const [label, tool, input] of [
   ["4k texture on meshy-6-lite", "meshy_image_to_3d", { input_task_id: "x", ai_model: "meshy-6-lite", texture_resolution: "4k" }],
   ["hd_texture on meshy-6-lite", "meshy_multi_image_to_3d", { image_urls: ["https://example.invalid/a.png"], ai_model: "meshy-6-lite", hd_texture: true }],
   ["8k refine on meshy-6-lite", "meshy_text_to_3d_refine", { preview_task_id: "x", ai_model: "meshy-6-lite", texture_resolution: "8k" }],
-  ["lowpoly on meshy-6-lite", "meshy_text_to_3d", { prompt: "a robot", ai_model: "meshy-6-lite", model_type: "lowpoly" }],
   ["multi-view texture on meshy-6", "meshy_multi_image_to_3d", { image_urls: ["https://example.invalid/a.png"], ai_model: "meshy-6", texture_image_urls: ["https://example.invalid/t.png"] }],
   ["multi-view texture with texture_prompt", "meshy_multi_image_to_3d", { image_urls: ["https://example.invalid/a.png"], texture_image_urls: ["https://example.invalid/t.png"], texture_prompt: "gold" }],
   ["multi-view texture without texturing", "meshy_multi_image_to_3d", { image_urls: ["https://example.invalid/a.png"], texture_image_urls: ["https://example.invalid/t.png"], should_texture: false }],
@@ -499,5 +486,22 @@ test("retired meshy-5 is rejected by every generation schema", () => {
     const { schema } = tools.get(name);
     assert.equal(schema.safeParse({ ...input, ai_model: "meshy-6-lite" }).success, true, name);
     assert.equal(schema.safeParse({ ...input, ai_model: "meshy-5" }).success, false, name);
+  }
+});
+
+test("retired Meshy T1 (meshy-t1, model_type lowpoly) is rejected by the generation schemas", () => {
+  const tools = new Map();
+  registerGenerationTools(
+    { registerTool(name, config, handler) { tools.set(name, { schema: config.inputSchema, handler }); } },
+    { async post() { throw new Error("must not post"); } },
+  );
+  for (const [name, input] of [
+    ["meshy_text_to_3d", { prompt: "a robot" }],
+    ["meshy_image_to_3d", { input_task_id: "x" }],
+  ]) {
+    const { schema } = tools.get(name);
+    assert.equal(schema.safeParse({ ...input, model_type: "smart-topology", ai_model: "meshy-t2.5" }).success, true, name);
+    assert.equal(schema.safeParse({ ...input, model_type: "smart-topology", ai_model: "meshy-t1" }).success, false, `${name} meshy-t1`);
+    assert.equal(schema.safeParse({ ...input, model_type: "lowpoly" }).success, false, `${name} lowpoly`);
   }
 });

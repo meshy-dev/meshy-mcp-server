@@ -95,7 +95,7 @@ const originAt = () =>
     .describe("'bottom' or 'center' (default bottom with auto_size).");
 const modelType = () =>
   z.nativeEnum(ModelType).optional()
-    .describe("standard (default); smart-topology (ai_model meshy-t2 or meshy-t2.5): a clean, part-separated, triangle-only mesh made directly at target_polycount, ignoring remesh/decimation; lowpoly is deprecated (billed like meshy-6, retires 2026-10-30).");
+    .describe("standard (default); smart-topology (ai_model meshy-t2 or meshy-t2.5): a clean, part-separated, triangle-only mesh made directly at target_polycount, ignoring remesh/decimation. lowpoly (Meshy T1) is retired: use smart-topology with meshy-t2.5.");
 
 const STANDARD_MODELS = "'latest' (default, = Meshy 7.1) or 'meshy-7.1' (best), 'meshy-6', 'meshy-6-lite' (fast, cheap, 2K textures only); 'meshy-7' is deprecated";
 
@@ -144,7 +144,7 @@ export const ImageTo3DInputSchema = z.object({
     .describe("A SUCCEEDED text-to-image / image-to-image task with exactly one image, used as the input."),
   ai_model: z.union([z.nativeEnum(AIModel), z.nativeEnum(SmartTopologyModel)])
     .optional()
-    .describe(`${STANDARD_MODELS}. With model_type smart-topology: 'meshy-t2' (the default there) or 'meshy-t2.5' (newest, sharper detail for game assets); 'meshy-t1' is deprecated.`),
+    .describe(`${STANDARD_MODELS}. With model_type smart-topology: 'meshy-t2' (the default there) or 'meshy-t2.5' (newest, sharper detail for game assets).`),
   geometry_resolution: geometryResolution(),
   ultra_mode: deprecatedUltraMode(),
   model_type: modelType(),
@@ -225,7 +225,9 @@ export const MultiImageTo3DInputSchema = z.object({
   decimation_mode: decimationMode(),
   should_remesh: shouldRemesh(),
   symmetry_mode: deprecatedSymmetryMode(),
-  model_type: z.enum([ModelType.STANDARD, ModelType.LOWPOLY])
+  // Ignored and never sent, so the retired "lowpoly" stays accepted here: refusing it
+  // would fail a request for a field that has no effect.
+  model_type: z.enum([ModelType.STANDARD, "lowpoly"])
     .optional()
     .describe("Deprecated; ignored (this endpoint has no model_type)."),
   should_texture: shouldTexture(),

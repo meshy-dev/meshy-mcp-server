@@ -62,20 +62,18 @@ export enum AIModel {
 // Smart Topology models — selected via model_type: "smart-topology" on
 // image-to-3d or text preview (T2 / T2.5 only). meshy-t2 adds native part separation with a
 // configurable target_polycount; meshy-t2.5 is the newest, with sharper detail and a
-// higher face ceiling. meshy-t2 stays the default. meshy-t1 is the deprecated previous
-// generation: still accepted on single-image generation, no longer advertised.
+// higher face ceiling. meshy-t2 stays the default. meshy-t1 is retired (2026-10-30) and
+// rejected locally.
 export enum SmartTopologyModel {
-  MESHY_T1 = "meshy-t1",
   MESHY_T2 = "meshy-t2",
   MESHY_T2_5 = "meshy-t2.5"
 }
 
 // Model Types
-// 'lowpoly' is deprecated by the API in favour of 'smart-topology'.
+// 'lowpoly' (Meshy T1) is retired (2026-10-30); 'smart-topology' replaces it.
 export enum ModelType {
   STANDARD = "standard",
-  SMART_TOPOLOGY = "smart-topology",
-  LOWPOLY = "lowpoly"
+  SMART_TOPOLOGY = "smart-topology"
 }
 
 // Texture Resolution (replaces the deprecated hd_texture boolean).
