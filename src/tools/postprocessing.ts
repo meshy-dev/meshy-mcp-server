@@ -203,8 +203,8 @@ Meshy N1: { input_task_id: "abc-123", ai_model: "meshy-n1", multiview_image_urls
         if (params.alpha_thumbnail !== undefined) request.alpha_thumbnail = params.alpha_thumbnail;
         if (params.texture_resolution !== undefined) request.texture_resolution = params.texture_resolution;
         if (params.hd_texture !== undefined) request.hd_texture = params.hd_texture;
-        // remove_lighting is meshy-6-only; meshy-6-lite and meshy-n1 refuse it with
-        // any value, and meshy-7 ignores it, so it is dropped for every other model.
+        // remove_lighting is meshy-6-only. meshy-n1 refused it above; meshy-6-lite
+        // refuses it with any value and meshy-7 ignores it, so it is dropped for them.
         if (aiModel === AIModel.MESHY_6 && params.remove_lighting !== undefined) request.remove_lighting = params.remove_lighting;
 
         const response = await client.post<CreateTaskApiResponse>("/openapi/v1/retexture", request as unknown as Record<string, unknown>);

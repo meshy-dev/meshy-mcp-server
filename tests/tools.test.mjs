@@ -118,11 +118,14 @@ for (const [label, input] of [
 //  2. The multi-view path rewriting meshy-n1 to meshy-7, or refusing it: before N1 it took
 //     meshy-7 only. Either way the agent would not get the model it asked for.
 //  3. Views reordered or dropped on the way out: element 0 must stay the front view.
-//  4. A request the API answers with 400 reaching it: a text prompt (alone or with an image),
-//     enable_pbr true, texture_resolution 4k / 8k, or hd_texture true. Each is refused before
-//     posting, and a missing image is reported as N1 needing one, not as the generic "pick one
-//     style input" that would steer the agent back to text_style_prompt.
-//  5. remove_lighting, a 400 on N1 with any value, being forwarded.
+//  4. A request the tool refuses reaching the API: a text prompt (alone, with views or with one
+//     image), enable_pbr true, texture_resolution 4k / 8k, or hd_texture true. Most are 400s on
+//     the API too. A prompt beside one image (the API drops it) and hd_texture true beside an
+//     explicit "2k" (the API takes the 2k) are not: refusing them is the tool's own policy,
+//     stricter than the API on purpose. A missing image is reported as N1 needing one, not as the
+//     generic "pick one style input" that would steer the agent back to text_style_prompt.
+//  5. remove_lighting, a 400 on N1 with any value, being forwarded or silently dropped instead of
+//     refused (meshy-6-lite keeps dropping it).
 //  6. enable_pbr sent as anything but false, or a texture_resolution other than 2k sent.
 //  7. The Meshy 7 multi-view default (no ai_model, or latest, sent as meshy-7) changing.
 // Generation tools refusing meshy-n1 is in generation.test.mjs.
@@ -150,7 +153,6 @@ test("retexture meshy-n1 from one image sends the image alone, no PBR, 2K", asyn
     enable_pbr: false,
     texture_resolution: "2k",
     hd_texture: false,
-    remove_lighting: true,
   });
   assert.equal(explicit.ai_model, "meshy-n1");
   assert.equal(explicit.enable_pbr, false);
@@ -186,6 +188,9 @@ for (const [label, input, message] of [
   ["texture_resolution 4k", { image_style_url: N1_VIEWS[0], texture_resolution: "4k" }, /meshy-n1 supports 2k textures only/],
   ["texture_resolution 8k", { multiview_image_urls: N1_VIEWS, texture_resolution: "8k" }, /meshy-n1 supports 2k textures only/],
   ["hd_texture true", { image_style_url: N1_VIEWS[0], hd_texture: true }, /meshy-n1 supports 2k textures only/],
+  ["hd_texture true beside an explicit 2k", { image_style_url: N1_VIEWS[0], texture_resolution: "2k", hd_texture: true }, /meshy-n1 supports 2k textures only/],
+  ["remove_lighting true", { image_style_url: N1_VIEWS[0], remove_lighting: true }, /meshy-n1 takes no remove_lighting/],
+  ["remove_lighting false", { multiview_image_urls: N1_VIEWS, remove_lighting: false }, /meshy-n1 takes no remove_lighting/],
   ["an image with views", { image_style_url: N1_VIEWS[0], multiview_image_urls: N1_VIEWS }, /mutually exclusive/],
 ]) {
   test(`retexture meshy-n1 refuses ${label} before posting`, async () => {

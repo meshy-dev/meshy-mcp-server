@@ -96,7 +96,7 @@ export const RetextureInputSchema = z.object({
     .describe("Deprecated: use texture_resolution '4k'."),
   remove_lighting: z.boolean()
     .optional()
-    .describe("Remove highlights/shadows from the base color (meshy-6 only; API default true there)."),
+    .describe("Remove highlights/shadows from the base color (meshy-6 only; API default true there). Not with meshy-n1."),
   target_formats: z.array(z.enum(["glb", "obj", "fbx", "stl", "usdz", "3mf"]))
     .optional()
     .describe("Formats to produce (default: all but 3mf; list '3mf' to get it)."),
