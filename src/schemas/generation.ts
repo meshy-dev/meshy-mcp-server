@@ -17,6 +17,12 @@ import {
   UrlSchema
 } from "./common.js";
 
+// Standard generation models, in AIModel order. Listed instead of
+// z.nativeEnum(AIModel), which also holds the retexture-only meshy-n1.
+const STANDARD_AI_MODELS = [
+  AIModel.MESHY_6_LITE, AIModel.MESHY_6, AIModel.MESHY_7, AIModel.MESHY_7_1, AIModel.LATEST
+] as const;
+
 /**
  * Shared optional parameters reused across generation/refine schemas.
  * Defined as factory functions so each schema gets a fresh ZodType instance.
@@ -142,7 +148,7 @@ export const ImageTo3DInputSchema = z.object({
   input_task_id: z.string()
     .optional()
     .describe("A SUCCEEDED text-to-image / image-to-image task with exactly one image, used as the input."),
-  ai_model: z.union([z.nativeEnum(AIModel), z.nativeEnum(SmartTopologyModel)])
+  ai_model: z.union([z.enum(STANDARD_AI_MODELS), z.nativeEnum(SmartTopologyModel)])
     .optional()
     .describe(`${STANDARD_MODELS}. With model_type smart-topology: 'meshy-t2' (the default there) or 'meshy-t2.5' (newest, sharper detail for game assets).`),
   geometry_resolution: geometryResolution(),
@@ -181,7 +187,7 @@ export const TextTo3DRefineInputSchema = z.object({
   enable_pbr: enablePbr(),
   texture_prompt: generationTexturePrompt(),
   texture_image_url: textureImageUrl(),
-  ai_model: z.nativeEnum(AIModel)
+  ai_model: z.enum(STANDARD_AI_MODELS)
     .optional()
     .describe("Optional override: 'meshy-7.1', 'latest' (= 7.1), 'meshy-6', 'meshy-6-lite' (2K only). Omit (recommended) to inherit the preview's model; not meshy-t2/t2.5."),
   texture_resolution: textureResolution(),
@@ -212,7 +218,7 @@ export const MultiImageTo3DInputSchema = z.object({
   input_task_id: z.string()
     .optional()
     .describe("A SUCCEEDED text-to-image / image-to-image task (multi-view included) whose images are the input."),
-  ai_model: z.nativeEnum(AIModel)
+  ai_model: z.enum(STANDARD_AI_MODELS)
     .default(AIModel.LATEST)
     .describe(`${STANDARD_MODELS}. No Smart Topology here.`),
   geometry_resolution: z.enum(["standard", "2k"]).optional()

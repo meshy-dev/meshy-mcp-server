@@ -16,6 +16,7 @@ import {
 } from "../schemas/postprocessing.js";
 import { TaskCreatedOutputSchema } from "../schemas/output.js";
 import {
+  AIModel,
   ANIMATE_CREDITS_PER_ACTION,
   CHARACTER_LIMIT,
   ResponseFormat,
@@ -23,7 +24,7 @@ import {
   TEXT_TO_MOTION_CREDITS
 } from "../constants.js";
 import { formatTaskCreatedResponse } from "../utils/response-formatter.js";
-import { checkTextureResolution } from "../utils/generation-options.js";
+import { checkMeshyN1Retexture, checkTextureResolution } from "../utils/generation-options.js";
 import { getTaskWithAutoInference } from "../services/meshy-client.js";
 import { buildApiRequest } from "../utils/request-builder.js";
 import {
@@ -110,7 +111,10 @@ Ask the user for EXACTLY ONE style input (the tool rejects combinations):
   - image_style_url: one image used as a STYLE reference
   - multiview_image_urls: 1–4 photos OF THE SAME OBJECT from different angles (not style references)
 
-Example: { input_task_id: "abc-123", text_style_prompt: "rusty metal" }`,
+ai_model "meshy-n1" (Meshy N1, 10 credits) textures from reference images only: image_style_url (one view of the object, read as the front) or multiview_image_urls (front view first, the rest in any order). It makes a 2K base color texture and nothing else, so it takes no text_style_prompt, enable_pbr, 4k/8k or remove_lighting, and the model must be within the Meshy N1 face limit in the API docs.
+
+Example: { input_task_id: "abc-123", text_style_prompt: "rusty metal" }
+Meshy N1: { input_task_id: "abc-123", ai_model: "meshy-n1", multiview_image_urls: ["<front>", "<back>"] }`,
       inputSchema: RetextureInputSchema,
       outputSchema: TaskCreatedOutputSchema,
       annotations: {
@@ -131,6 +135,8 @@ Example: { input_task_id: "abc-123", text_style_prompt: "rusty metal" }`,
             }]
           };
         }
+
+        if (params.ai_model === AIModel.MESHY_N1) checkMeshyN1Retexture(params);
 
         // The three style inputs are mutually exclusive on the API side
         // (texture.multiview has no prompt field). Reject locally so the caller
@@ -160,19 +166,19 @@ Example: { input_task_id: "abc-123", text_style_prompt: "rusty metal" }`,
           };
         }
 
-        // multiview_image_urls runs the texture.multiview backend, which only
-        // exists on Meshy 7, and the API requires the explicit id. On retexture
-        // "latest" is Meshy 7, so it is sent as "meshy-7".
+        // multiview_image_urls exists on Meshy 7 and Meshy N1 only, and the API
+        // requires the explicit id. On retexture "latest" is Meshy 7, so it is
+        // sent as "meshy-7"; meshy-n1 is sent as given.
         let aiModel: string = params.ai_model;
         if (params.multiview_image_urls?.length) {
-          if (aiModel === "latest") {
-            aiModel = "meshy-7";
-          } else if (aiModel !== "meshy-7") {
+          if (aiModel === AIModel.LATEST) {
+            aiModel = AIModel.MESHY_7;
+          } else if (aiModel !== AIModel.MESHY_7 && aiModel !== AIModel.MESHY_N1) {
             return {
               isError: true,
               content: [{
                 type: "text",
-                text: `Error: multiview_image_urls requires ai_model "meshy-7", but "${params.ai_model}" was given.`
+                text: `Error: multiview_image_urls requires ai_model "meshy-7" or "meshy-n1", but "${params.ai_model}" was given.`
               }]
             };
           }
@@ -197,8 +203,9 @@ Example: { input_task_id: "abc-123", text_style_prompt: "rusty metal" }`,
         if (params.alpha_thumbnail !== undefined) request.alpha_thumbnail = params.alpha_thumbnail;
         if (params.texture_resolution !== undefined) request.texture_resolution = params.texture_resolution;
         if (params.hd_texture !== undefined) request.hd_texture = params.hd_texture;
-        // remove_lighting is meshy-6-only; the lite model refuses it.
-        if (aiModel === "meshy-6" && params.remove_lighting !== undefined) request.remove_lighting = params.remove_lighting;
+        // remove_lighting is meshy-6-only; meshy-6-lite and meshy-n1 refuse it with
+        // any value, and meshy-7 ignores it, so it is dropped for every other model.
+        if (aiModel === AIModel.MESHY_6 && params.remove_lighting !== undefined) request.remove_lighting = params.remove_lighting;
 
         const response = await client.post<CreateTaskApiResponse>("/openapi/v1/retexture", request as unknown as Record<string, unknown>);
         const taskId = response.result;

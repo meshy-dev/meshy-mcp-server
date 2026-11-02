@@ -70,27 +70,27 @@ export const RetextureInputSchema = z.object({
   text_style_prompt: z.string()
     .max(800, "Prompt must not exceed 800 characters")
     .optional()
-    .describe("The texture style in words (max 800 characters)."),
+    .describe("The texture style in words (max 800 characters). Not with meshy-n1."),
   image_style_url: UrlSchema
     .optional()
-    .describe("One image used as the style reference."),
+    .describe("One image used as the style reference. With meshy-n1: a view of the object, read as the front view."),
   multiview_image_urls: z.array(UrlSchema)
     .min(1, "Provide at least 1 view")
     .max(4, "At most 4 views are accepted")
     .optional()
-    .describe("1–4 ordered views of the same object; element 0 is primary and alone drives metallic/roughness. Needs Meshy 7 ('latest' is sent as 'meshy-7')."),
-  ai_model: z.enum([AIModel.MESHY_6_LITE, AIModel.MESHY_6, AIModel.MESHY_7, AIModel.LATEST])
+    .describe("1–4 views of the same object: element 0 is the primary (front) view, the others in any order. Needs ai_model 'meshy-7' ('latest' is sent as 'meshy-7'; element 0 alone drives metallic/roughness) or 'meshy-n1'."),
+  ai_model: z.enum([AIModel.MESHY_6_LITE, AIModel.MESHY_6, AIModel.MESHY_7, AIModel.MESHY_N1, AIModel.LATEST])
     .default(AIModel.LATEST)
-    .describe("'latest' (default, = Meshy 7), 'meshy-7', 'meshy-6', or 'meshy-6-lite' (fast, 2K only). No meshy-7.1 here."),
+    .describe("'latest' (default, = Meshy 7), 'meshy-7', 'meshy-6', 'meshy-6-lite' (fast, 2K only), or 'meshy-n1' (Meshy N1: a 2K base color texture from image_style_url or 1–4 multiview_image_urls, front view first; no text prompt, no PBR; 10 credits). No meshy-7.1 here."),
   enable_original_uv: z.boolean()
     .optional()
     .describe("Keep the existing UVs instead of a fresh unwrap. Default true with input_task_id, false with model_url (safest for uploads)."),
   enable_pbr: z.boolean()
     .default(false)
-    .describe("Also make metallic/roughness/normal maps."),
+    .describe("Also make metallic/roughness/normal maps. Not with meshy-n1."),
   texture_resolution: z.nativeEnum(TextureResolution)
     .optional()
-    .describe("Base color texture: 2k (default), 4k or 8k (15 credits instead of 10; PBR maps stay 4K, no emission map). 4k/8k not on meshy-6-lite."),
+    .describe("Base color texture: 2k (default), 4k or 8k (15 credits instead of 10; PBR maps stay 4K, no emission map). 4k/8k not on meshy-6-lite or meshy-n1."),
   hd_texture: z.boolean()
     .optional()
     .describe("Deprecated: use texture_resolution '4k'."),

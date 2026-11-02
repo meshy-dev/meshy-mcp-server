@@ -38,6 +38,7 @@ function createHarness(register) {
       const result = await handler(schema.parse(input));
       assert.equal(result.isError, true);
       assert.equal(requests.length, 0);
+      return result.content[0].text;
     },
     schema(name) {
       return tools.get(name).schema;
@@ -110,6 +111,109 @@ for (const [label, input] of [
     await invalid("meshy_retexture", input);
   });
 }
+
+// Meshy N1 on meshy_retexture (ENG-5144): a 2K base color texture from reference images only
+// (one image, or 1–4 views with the front first). What these tests guard against:
+//  1. meshy-n1 missing from the retexture schema, so an agent cannot pick it.
+//  2. The multi-view path rewriting meshy-n1 to meshy-7, or refusing it: before N1 it took
+//     meshy-7 only. Either way the agent would not get the model it asked for.
+//  3. Views reordered or dropped on the way out: element 0 must stay the front view.
+//  4. A request the API answers with 400 reaching it: a text prompt (alone or with an image),
+//     enable_pbr true, texture_resolution 4k / 8k, or hd_texture true. Each is refused before
+//     posting, and a missing image is reported as N1 needing one, not as the generic "pick one
+//     style input" that would steer the agent back to text_style_prompt.
+//  5. remove_lighting, a 400 on N1 with any value, being forwarded.
+//  6. enable_pbr sent as anything but false, or a texture_resolution other than 2k sent.
+//  7. The Meshy 7 multi-view default (no ai_model, or latest, sent as meshy-7) changing.
+// Generation tools refusing meshy-n1 is in generation.test.mjs.
+const N1_VIEWS = ["front", "back", "left", "right"].map((view) => `https://example.invalid/${view}.png`);
+
+test("retexture meshy-n1 from one image sends the image alone, no PBR, 2K", async () => {
+  const { call } = createHarness(registerPostProcessingTools);
+  const { path, body } = await call("meshy_retexture", {
+    input_task_id: "offline",
+    ai_model: "meshy-n1",
+    image_style_url: N1_VIEWS[0],
+  });
+  assert.equal(path, "/openapi/v1/retexture");
+  assert.equal(body.ai_model, "meshy-n1");
+  assert.equal(body.image_style_url, N1_VIEWS[0]);
+  assert.equal(body.enable_pbr, false);
+  for (const field of ["text_style_prompt", "multiview_image_urls", "texture_resolution", "hd_texture", "remove_lighting"]) {
+    assert.equal(field in body, false, field);
+  }
+
+  const { body: explicit } = await call("meshy_retexture", {
+    model_url: "https://example.invalid/model.glb",
+    ai_model: "meshy-n1",
+    image_style_url: N1_VIEWS[0],
+    enable_pbr: false,
+    texture_resolution: "2k",
+    hd_texture: false,
+    remove_lighting: true,
+  });
+  assert.equal(explicit.ai_model, "meshy-n1");
+  assert.equal(explicit.enable_pbr, false);
+  assert.equal(explicit.texture_resolution, "2k");
+  assert.notEqual(explicit.hd_texture, true);
+  assert.equal("remove_lighting" in explicit, false);
+});
+
+for (const count of [1, 2, 3, 4]) {
+  test(`retexture meshy-n1 sends ${count} view(s) in order, front first, without forcing meshy-7`, async () => {
+    const { call } = createHarness(registerPostProcessingTools);
+    const views = N1_VIEWS.slice(0, count);
+    const { body } = await call("meshy_retexture", {
+      input_task_id: "offline",
+      ai_model: "meshy-n1",
+      multiview_image_urls: views,
+    });
+    assert.equal(body.ai_model, "meshy-n1");
+    assert.deepEqual(body.multiview_image_urls, views);
+    assert.equal(body.enable_pbr, false);
+    for (const field of ["text_style_prompt", "image_style_url", "texture_resolution", "remove_lighting"]) {
+      assert.equal(field in body, false, field);
+    }
+  });
+}
+
+for (const [label, input, message] of [
+  ["a text prompt alone", { text_style_prompt: "rusty metal" }, /meshy-n1 needs a reference image/],
+  ["no style input at all", {}, /meshy-n1 needs a reference image/],
+  ["a text prompt with an image", { text_style_prompt: "rusty metal", image_style_url: N1_VIEWS[0] }, /meshy-n1 takes no text_style_prompt/],
+  ["a text prompt with views", { text_style_prompt: "rusty metal", multiview_image_urls: N1_VIEWS }, /meshy-n1 takes no text_style_prompt/],
+  ["enable_pbr true", { image_style_url: N1_VIEWS[0], enable_pbr: true }, /meshy-n1 .*enable_pbr/],
+  ["texture_resolution 4k", { image_style_url: N1_VIEWS[0], texture_resolution: "4k" }, /meshy-n1 supports 2k textures only/],
+  ["texture_resolution 8k", { multiview_image_urls: N1_VIEWS, texture_resolution: "8k" }, /meshy-n1 supports 2k textures only/],
+  ["hd_texture true", { image_style_url: N1_VIEWS[0], hd_texture: true }, /meshy-n1 supports 2k textures only/],
+  ["an image with views", { image_style_url: N1_VIEWS[0], multiview_image_urls: N1_VIEWS }, /mutually exclusive/],
+]) {
+  test(`retexture meshy-n1 refuses ${label} before posting`, async () => {
+    const { invalid } = createHarness(registerPostProcessingTools);
+    const text = await invalid("meshy_retexture", { input_task_id: "x", ai_model: "meshy-n1", ...input });
+    assert.match(text, message);
+  });
+}
+
+test("retexture multi-view still defaults to meshy-7 and names both multi-view models", async () => {
+  const h = createHarness(registerPostProcessingTools);
+  for (const ai_model of [undefined, "latest", "meshy-7"]) {
+    const { body } = await h.call("meshy_retexture", {
+      input_task_id: "offline",
+      multiview_image_urls: N1_VIEWS,
+      ...(ai_model ? { ai_model } : {}),
+    });
+    assert.equal(body.ai_model, "meshy-7", String(ai_model));
+    assert.deepEqual(body.multiview_image_urls, N1_VIEWS);
+  }
+  const text = await createHarness(registerPostProcessingTools).invalid("meshy_retexture", {
+    input_task_id: "x",
+    ai_model: "meshy-6",
+    multiview_image_urls: N1_VIEWS,
+  });
+  assert.match(text, /meshy-7/);
+  assert.match(text, /meshy-n1/);
+});
 
 test("text-to-image omits aspect_ratio unless set and accepts GPT Image 2.5", async () => {
   const { call } = createHarness(registerImageTools);
