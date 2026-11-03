@@ -138,9 +138,11 @@ Meshy N1: { input_task_id: "abc-123", ai_model: "meshy-n1", multiview_image_urls
 
         if (params.ai_model === AIModel.MESHY_N1) checkMeshyN1Retexture(params);
 
-        // The three style inputs are mutually exclusive on the API side
-        // (texture.multiview has no prompt field). Reject locally so the caller
-        // gets a named field instead of a generic 400.
+        // This tool takes exactly one style input and refuses any combination.
+        // The API is looser: views beside a prompt or an image are a 400 there
+        // (texture.multiview has no prompt field), but the v1 endpoint clears a
+        // prompt beside one image and textures from the image alone. Refusing
+        // locally names the fields and never drops one without a word.
         const styleInputs = [
           params.text_style_prompt ? "text_style_prompt" : null,
           params.image_style_url ? "image_style_url" : null,

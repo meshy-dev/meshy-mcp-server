@@ -16,7 +16,9 @@ is at 100% in prod and the public retexture docs list `meshy-n1`. Before that, t
   `hd_texture: true` and `remove_lighting` (either value) are refused locally, before any request
   or charge; a request without an image is told that Meshy N1 needs one. A prompt beside one
   image and `hd_texture: true` beside `texture_resolution: "2k"` are not 400s on the API (it drops
-  the prompt and takes the explicit 2k); the tool refuses them on purpose.
+  the prompt and takes the explicit 2k); the tool refuses them on purpose. Other invalid input,
+  such as a URL the schema accepts but the API does not fetch (`ftp://`), still reaches the API,
+  which answers it.
   The model must be within the Meshy N1 face limit in the API docs. The generation tools do not
   accept `meshy-n1`.
 
