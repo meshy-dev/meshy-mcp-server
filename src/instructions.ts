@@ -17,7 +17,7 @@ Before calling ANY tool that costs credits, ask which ai_model to use where ther
 |------|---------|
 | meshy_text_to_3d (preview, mesh only) | 20 (meshy-7.1 / latest / meshy-6), 5 (meshy-6-lite, meshy-t2, meshy-t2.5) |
 | meshy_image_to_3d / meshy_multi_image_to_3d | table below |
-| meshy_text_to_3d_refine / meshy_retexture | 10 (15 with texture_resolution "8k") |
+| meshy_text_to_3d_refine / meshy_retexture | 10 (15 with texture_resolution "8k"); retexture meshy-n1 10 (2K only) |
 | meshy_remesh / meshy_rig (incl. walking + running) / meshy_uv_unwrap | 5 |
 | meshy_animate | 3 per action |
 | meshy_text_to_motion | 10 (prime) / 3 (swift) |
@@ -97,6 +97,7 @@ Suggested flow:
 Trigger: user wants to change textures/style of existing model.
 Suggested flow:
 1. Ask the user for EXACTLY ONE style input (see meshy_retexture), then call it.
+Meshy N1 (ai_model "meshy-n1", 10 credits) is image-only: one image of the object (image_style_url) or 1–4 views (multiview_image_urls, front first). It makes a 2K base color texture only, with no text prompt and no PBR maps; offer it when the user has photos of the object and a base color texture is enough.
 
 ## Scenario H: Cheap Format Conversion / Resize
 Trigger: user has an existing model (task or URL) and only needs another file format, or wants it scaled to real-world dimensions — no re-generation.

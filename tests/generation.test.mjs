@@ -489,6 +489,28 @@ test("retired meshy-5 is rejected by every generation schema", () => {
   }
 });
 
+// AIModel is shared with meshy_retexture; meshy-n1 is a retexture model, so it must not
+// become a valid generation model by being in that enum.
+test("retexture-only meshy-n1 is rejected by every generation schema", () => {
+  const tools = new Map();
+  registerGenerationTools(
+    { registerTool(name, config, handler) { tools.set(name, { schema: config.inputSchema, handler }); } },
+    { async post() { throw new Error("must not post"); } },
+  );
+  for (const [name, input] of [
+    ["meshy_text_to_3d", { prompt: "a robot" }],
+    ["meshy_image_to_3d", { input_task_id: "x" }],
+    ["meshy_multi_image_to_3d", { image_urls: ["https://example.invalid/a.png"] }],
+    ["meshy_text_to_3d_refine", { preview_task_id: "x" }],
+  ]) {
+    const { schema } = tools.get(name);
+    for (const ai_model of ["latest", "meshy-7.1", "meshy-7", "meshy-6", "meshy-6-lite"]) {
+      assert.equal(schema.safeParse({ ...input, ai_model }).success, true, `${name} ${ai_model}`);
+    }
+    assert.equal(schema.safeParse({ ...input, ai_model: "meshy-n1" }).success, false, name);
+  }
+});
+
 test("retired Meshy T1 (meshy-t1, model_type lowpoly) is rejected by the generation schemas", () => {
   const tools = new Map();
   registerGenerationTools(

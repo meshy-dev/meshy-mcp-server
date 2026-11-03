@@ -42,7 +42,9 @@ Dependencies are installed from the lockfile. Review security advisories separat
 
 ## Model-contract maintenance
 
-Keep generation endpoint contracts separate. Text preview and single-image support T2 and T2.5 Smart Topology; multi-image does not. Text Smart Topology rejects quads; T2 targets 100–15,000 faces, T2.5 100–30,000. Standard geometry controls require Meshy 7.1/latest, with multi-image limited to standard/2k. Refine should inherit its preview model unless explicitly overridden.
+Keep generation endpoint contracts separate. Text preview and single-image support T2 and T2.5 Smart Topology; multi-image does not. Text Smart Topology rejects quads; T2 targets 100–15,000 faces, T2.5 100–30,000. Standard geometry controls require Meshy 7.1/latest, with multi-image limited to standard/2k. Refine should inherit its preview model unless explicitly overridden. Retexture `meshy-n1` takes reference images only (one image, or 1–4 views with the front first) and makes a 2K base color texture; it is retexture-only, so the generation schemas list their models instead of taking the whole `AIModel` enum.
+
+Release a change that adds a model only once the API serves it to every caller and the public API docs list it.
 
 When Meshy changes the API:
 

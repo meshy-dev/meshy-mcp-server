@@ -29,7 +29,8 @@
 - **Smart Topology**: `model_type: "smart-topology"` with `ai_model: "meshy-t2"` on text-to-3d (new in v0.6.0) and image-to-3d. Clean, part-separated triangle mesh generated directly at 100–15,000 faces (default 4,000) for 5 credits of mesh. `meshy-t2.5` (v0.6.4) is the newest Smart Topology model, with sharper detail for game assets: 100–30,000 faces (default 15,000), same cost
 - **Multi-view texture on multi-image (v0.6.0)**: `texture_image_urls` — 1–4 views of the same object drive the texture (Meshy 7.1)
 - **8K Textures (v0.5.0)**: `texture_resolution: "2k" | "4k" | "8k"` on image-to-3d, multi-image-to-3d, text-to-3d refine and retexture (8K costs 15 credits vs 10). Replaces the now-deprecated `hd_texture` flag
-- **Multi-view Retexture (v0.5.0)**: `multiview_image_urls` — 1–4 ordered views of the *same object* drive the texture instead of a single style reference (requires Meshy 7)
+- **Multi-view Retexture (v0.5.0)**: `multiview_image_urls` — 1–4 views of the *same object*, front view first, drive the texture instead of a single style reference (requires Meshy 7 or Meshy N1)
+- **Meshy N1 Retexture**: `ai_model: "meshy-n1"` on `meshy_retexture` — a 2K base color texture from reference images only: one image (`image_style_url`, read as the front view) or 1–4 views (`multiview_image_urls`, front first, the rest in any order). 10 credits. No text prompt, PBR maps, 4K/8K or `remove_lighting`: the tool refuses those before any request
 - **Auto-Rigging & Animation**: Add skeletons and animations to humanoid characters. `meshy_animate` takes one preset action, up to 10 actions as clips in one file, or a generated motion (v0.6.3); `meshy_list_animations` finds action ids
 - **Text to Motion (v0.6.3)**: generate a motion clip from a description (`prime` FBX, 10 credits / `swift` BVH, 3 credits) and apply it to a rigged character
 - **Creative Lab**: One tool — a photo → a finished, print-ready product. **9 products**: figure, lamp, keychain (with engraved `name_text`), fridge-magnet, vinyl-figure, brick-figure, keycap, and (v0.6.3) fidget-pixel and fidget-collapsible. Runs the whole pipeline and returns only the final 3D model; build options and output format are configurable
@@ -55,7 +56,7 @@
 | `meshy_text_to_3d` / `_refine` | `meshy-7.1`, `meshy-6`, `meshy-6-lite`, `latest` — plus `meshy-t2` / `meshy-t2.5` with `model_type: "smart-topology"` (preview only) | Meshy 7.1 |
 | `meshy_image_to_3d` | `meshy-7.1`, `meshy-6`, `meshy-6-lite`, `latest` — plus `meshy-t2` / `meshy-t2.5` with `model_type: "smart-topology"` | Meshy 7.1 |
 | `meshy_multi_image_to_3d` | `meshy-7.1`, `meshy-6`, `meshy-6-lite`, `latest` (no Smart Topology) | Meshy 7.1 |
-| `meshy_retexture` | `meshy-7`, `meshy-6`, `meshy-6-lite`, `latest` (no `meshy-7.1`) | Meshy 7 |
+| `meshy_retexture` | `meshy-7`, `meshy-6`, `meshy-6-lite`, `meshy-n1` (image-only, 2K base color), `latest` (no `meshy-7.1`) | Meshy 7 |
 
 Legacy id still accepted: `meshy-7` on generation (deprecated, billed like `meshy-7.1`). `meshy-5` and Meshy T1 (`meshy-t1`, `model_type: "lowpoly"`) are retired and no longer accepted; use `meshy-6-lite` and `smart-topology` + `meshy-t2.5`.
 
@@ -72,7 +73,7 @@ Text-to-3D preview is billed mesh-only; refine adds 10 (15 at 8K). `geometry_res
 
 Smart Topology generates directly at `target_polycount` and skips remeshing: `meshy-t2` 100–15,000 faces (default 4,000), `meshy-t2.5` 100–30,000 (default 15,000). Without `ai_model`, `model_type: "smart-topology"` uses `meshy-t2`. Output is triangle-only. For standard models, `target_polycount` needs `should_remesh: true` and is overridden by `decimation_mode`.
 
-Retexture is 10 credits (15 at 8K). Creative Lab is **36** credits per product (6 + 30; lamp is 30 + 6) except **keycap, 62** (12 + 50) and **fidget-collapsible, 6** (single stage). Images: nano-banana 3, nano-banana-2 6, nano-banana-2-lite 3, nano-banana-2-1 4, nano-banana-pro 9, GPT Image models 9 (text) / 12 (image). Other tools: remesh 5, rig 5, animate 3 per action, text-to-motion 10 (prime) / 3 (swift), convert 1, resize 1, uv-unwrap 5, analyze-printability free, repair-printability 10, multicolor 10, auto-split 10.
+Retexture is 10 credits (15 at 8K); Meshy N1 (`meshy-n1`) is 10 credits and 2K only. Creative Lab is **36** credits per product (6 + 30; lamp is 30 + 6) except **keycap, 62** (12 + 50) and **fidget-collapsible, 6** (single stage). Images: nano-banana 3, nano-banana-2 6, nano-banana-2-lite 3, nano-banana-2-1 4, nano-banana-pro 9, GPT Image models 9 (text) / 12 (image). Other tools: remesh 5, rig 5, animate 3 per action, text-to-motion 10 (prime) / 3 (swift), convert 1, resize 1, uv-unwrap 5, analyze-printability free, repair-printability 10, multicolor 10, auto-split 10.
 
 ## Prerequisites
 

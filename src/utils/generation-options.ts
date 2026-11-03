@@ -83,11 +83,17 @@ const isMeshy71 = (model?: string) => model === AIModel.MESHY_7_1 || model === A
 /** meshy-6-lite: 2K textures only. */
 export const isLiteModel = (model?: string) => model === AIModel.MESHY_6_LITE;
 
+/** 2K textures only: meshy-6-lite, and meshy-n1 (retexture only). */
+const isTwoKTextureModel = (model?: string) => isLiteModel(model) || model === AIModel.MESHY_N1;
+
 /** image_enhancement is honored on meshy-6, meshy-7.1 and latest. */
 export const supportsImageEnhancement = (model?: string) => model === AIModel.MESHY_6 || isMeshy71(model);
 
 /**
- * Rejects 4K/8K textures on the lite model instead of letting the API 400.
+ * Rejects 4K/8K textures (and hd_texture) on a 2K-only model before posting. 4k/8k is a 400 from
+ * the API too. hd_texture true beside an explicit texture_resolution "2k" is not: the API takes the
+ * explicit resolution. Refusing it is this tool's own policy, stricter than the API on purpose,
+ * since the caller asked for an HD texture the model cannot make.
  * `alternatives` names the models that endpoint takes for 4k/8k.
  */
 export function checkTextureResolution(
@@ -96,8 +102,50 @@ export function checkTextureResolution(
   hdTexture?: boolean,
   alternatives = "meshy-6, meshy-7.1 or latest"
 ) {
-  if (isLiteModel(model) && ((textureResolution !== undefined && textureResolution !== "2k") || hdTexture)) {
+  if (isTwoKTextureModel(model) && ((textureResolution !== undefined && textureResolution !== "2k") || hdTexture)) {
     throw new RequestValidationError(`${model} supports 2k textures only. Use ${alternatives} for 4k/8k.`);
+  }
+}
+
+/**
+ * Meshy N1 on retexture textures from reference images alone and makes a base color texture
+ * only. On meshy-n1 the API answers 400 for a text prompt with no image or beside views,
+ * enable_pbr true, and remove_lighting with any value; a prompt beside one image (v1) it drops
+ * without a word. This check refuses all of them, the dropped prompt included: stricter than the
+ * API on purpose, so an agent never gets a texture made from less than it asked for. Called
+ * before the generic one-style-input check, so a missing image is reported as N1 needing one
+ * rather than as "pick one of text_style_prompt, ...". 4k/8k and hd_texture are
+ * checkTextureResolution's.
+ */
+export function checkMeshyN1Retexture(params: {
+  text_style_prompt?: string;
+  image_style_url?: string;
+  multiview_image_urls?: string[];
+  enable_pbr?: boolean;
+  remove_lighting?: boolean;
+}) {
+  if (!params.image_style_url && !params.multiview_image_urls?.length) {
+    throw new RequestValidationError(
+      "meshy-n1 needs a reference image: image_style_url (one view of the object, read as the front view) " +
+      "or multiview_image_urls (1–4 views, front first). It takes no text_style_prompt; " +
+      "for a texture described in words, use another ai_model."
+    );
+  }
+  if (params.text_style_prompt) {
+    throw new RequestValidationError(
+      "meshy-n1 takes no text_style_prompt: it textures from the reference image(s) alone. " +
+      "Drop text_style_prompt, or use another ai_model for a texture described in words."
+    );
+  }
+  if (params.enable_pbr) {
+    throw new RequestValidationError(
+      "meshy-n1 makes a base color texture only, so enable_pbr must be false. Use another ai_model for PBR maps."
+    );
+  }
+  if (params.remove_lighting !== undefined) {
+    throw new RequestValidationError(
+      "meshy-n1 takes no remove_lighting, true or false. Drop it, or use meshy-6 to remove baked lighting."
+    );
   }
 }
 

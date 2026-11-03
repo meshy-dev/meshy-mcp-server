@@ -1,5 +1,17 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- `ai_model: "meshy-n1"` (Meshy N1) on `meshy_retexture`: a 2K base color texture from reference
+  images only, for 10 credits. It takes one image (`image_style_url`, read as the front view) or
+  1–4 views (`multiview_image_urls`, front view first, the others in any order); multi-view now
+  accepts `meshy-n1` as well as `meshy-7`, and still sends `meshy-7` when no model or `latest` is
+  given. A text prompt (even beside an image), `enable_pbr: true`, `texture_resolution` `4k` / `8k`,
+  `hd_texture: true` and `remove_lighting` are refused before any request. The generation tools do
+  not accept `meshy-n1`.
+
 ## [0.6.7] - 2026-10-30
 
 ### Removed
