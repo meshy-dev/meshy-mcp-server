@@ -2,25 +2,15 @@
 
 ## [Unreleased]
 
-Release prerequisite: publish this only once the API's Meshy N1 gate (`eng_3300_api_meshy_n1`)
-is at 100% in prod and the public retexture docs list `meshy-n1`. Before that, the API refuses
-`meshy-n1` for most callers.
-
 ### Added
 
 - `ai_model: "meshy-n1"` (Meshy N1) on `meshy_retexture`: a 2K base color texture from reference
-  images only, for 10 credits. It takes one image (`image_style_url`, read as the front view) or 1–4
-  views (`multiview_image_urls`, front view first, the others in any order); multi-view now accepts
-  `meshy-n1` as well as `meshy-7`, and still sends `meshy-7` when no model or `latest` is given.
-  A text prompt (with or without an image), `enable_pbr: true`, `texture_resolution` `4k` / `8k`,
-  `hd_texture: true` and `remove_lighting` (either value) are refused locally, before any request
-  or charge; a request without an image is told that Meshy N1 needs one. A prompt beside one
-  image and `hd_texture: true` beside `texture_resolution: "2k"` are not 400s on the API (it drops
-  the prompt and takes the explicit 2k); the tool refuses them on purpose. Other invalid input,
-  such as a URL the schema accepts but the API does not fetch (`ftp://`), still reaches the API,
-  which answers it.
-  The model must be within the Meshy N1 face limit in the API docs. The generation tools do not
-  accept `meshy-n1`.
+  images only, for 10 credits. It takes one image (`image_style_url`, read as the front view) or
+  1–4 views (`multiview_image_urls`, front view first, the others in any order); multi-view now
+  accepts `meshy-n1` as well as `meshy-7`, and still sends `meshy-7` when no model or `latest` is
+  given. A text prompt (even beside an image), `enable_pbr: true`, `texture_resolution` `4k` / `8k`,
+  `hd_texture: true` and `remove_lighting` are refused before any request. The generation tools do
+  not accept `meshy-n1`.
 
 ## [0.6.7] - 2026-10-30
 

@@ -112,23 +112,9 @@ for (const [label, input] of [
   });
 }
 
-// Meshy N1 on meshy_retexture (ENG-5144): a 2K base color texture from reference images only
-// (one image, or 1–4 views with the front first). What these tests guard against:
-//  1. meshy-n1 missing from the retexture schema, so an agent cannot pick it.
-//  2. The multi-view path rewriting meshy-n1 to meshy-7, or refusing it: before N1 it took
-//     meshy-7 only. Either way the agent would not get the model it asked for.
-//  3. Views reordered or dropped on the way out: element 0 must stay the front view.
-//  4. A request the tool refuses reaching the API: a text prompt (alone, with views or with one
-//     image), enable_pbr true, texture_resolution 4k / 8k, or hd_texture true. Most are 400s on
-//     the API too. A prompt beside one image (the API drops it) and hd_texture true beside an
-//     explicit "2k" (the API takes the 2k) are not: refusing them is the tool's own policy,
-//     stricter than the API on purpose. A missing image is reported as N1 needing one, not as the
-//     generic "pick one style input" that would steer the agent back to text_style_prompt.
-//  5. remove_lighting, a 400 on N1 with any value, being forwarded or silently dropped instead of
-//     refused (meshy-6-lite keeps dropping it).
-//  6. enable_pbr sent as anything but false, or a texture_resolution other than 2k sent.
-//  7. The Meshy 7 multi-view default (no ai_model, or latest, sent as meshy-7) changing.
-// Generation tools refusing meshy-n1 is in generation.test.mjs.
+// Meshy N1 on meshy_retexture: a 2K base color texture from reference images only (one image, or
+// 1–4 views, front first). meshy-n1 is sent as given, views keep their order, and the inputs it
+// cannot honor are refused before posting. Generation tools refusing meshy-n1: generation.test.mjs.
 const N1_VIEWS = ["front", "back", "left", "right"].map((view) => `https://example.invalid/${view}.png`);
 
 test("retexture meshy-n1 from one image sends the image alone, no PBR, 2K", async () => {

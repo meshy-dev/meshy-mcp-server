@@ -111,7 +111,7 @@ Ask the user for EXACTLY ONE style input (the tool rejects combinations):
   - image_style_url: one image used as a STYLE reference
   - multiview_image_urls: 1–4 photos OF THE SAME OBJECT from different angles (not style references)
 
-ai_model "meshy-n1" (Meshy N1, 10 credits) textures from reference images only: image_style_url (one view of the object, read as the front) or multiview_image_urls (front view first, the rest in any order). It makes a 2K base color texture and nothing else, so it takes no text_style_prompt, enable_pbr, 4k/8k or remove_lighting, and the model must be within the Meshy N1 face limit in the API docs.
+ai_model "meshy-n1" (Meshy N1, 10 credits) textures from reference images only: image_style_url (one view of the object, read as the front) or multiview_image_urls (front view first, the rest in any order). It makes a 2K base color texture and nothing else, so it takes no text_style_prompt, enable_pbr, 4k/8k or remove_lighting.
 
 Example: { input_task_id: "abc-123", text_style_prompt: "rusty metal" }
 Meshy N1: { input_task_id: "abc-123", ai_model: "meshy-n1", multiview_image_urls: ["<front>", "<back>"] }`,
