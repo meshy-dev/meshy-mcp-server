@@ -83,7 +83,7 @@ const isMeshy71 = (model?: string) => model === AIModel.MESHY_7_1 || model === A
 /** meshy-6-lite: 2K textures only. */
 export const isLiteModel = (model?: string) => model === AIModel.MESHY_6_LITE;
 
-/** 2K textures only: meshy-6-lite, and meshy-n1 (retexture only). */
+/** 2K textures only: meshy-6-lite, and meshy-n1 (retexture ai_model, or texture_model on image / multi-image). */
 const isTwoKTextureModel = (model?: string) => isLiteModel(model) || model === AIModel.MESHY_N1;
 
 /** image_enhancement is honored on meshy-6, meshy-7.1 and latest. */
@@ -149,16 +149,97 @@ export function checkMeshyN1Retexture(params: {
   }
 }
 
+/**
+ * texture_model on image-to-3d and multi-image-to-3d (v1, PRO-4277 / PRO-4335): the texture model,
+ * picked apart from the geometry. meshy-6 is not offered: the API takes it only as meshy-6's own
+ * default. Multi-image takes the multi-view texture models only.
+ */
+export const IMAGE_TEXTURE_MODELS = [AIModel.MESHY_7, AIModel.MESHY_N1, AIModel.MESHY_6_LITE] as const;
+export const MULTI_IMAGE_TEXTURE_MODELS = [AIModel.MESHY_7, AIModel.MESHY_N1] as const;
+
+/** texture_image_urls slots are read by the Meshy 7 and Meshy N1 texture models. */
+const isMultiViewTextureModel = (textureModel?: string) =>
+  textureModel === AIModel.MESHY_7 || textureModel === AIModel.MESHY_N1;
+
+/**
+ * Checks a texture_model request against what that texture model can do and returns the
+ * texture_model to send. It mirrors the API's 400s for the pair (meshyd checkAPITextureModelAsk),
+ * so an agent hears them before a call:
+ *   - meshy-n1: no texture_prompt, no enable_pbr true, 2K only, no remove_lighting true, and no
+ *     quad remesh (should_remesh true, or meshy-6-lite's default remesh, with topology quad);
+ *   - meshy-6-lite: 2K only, no remove_lighting true;
+ *   - meshy-7: 2K / 4K / 8K on any geometry, so it also lifts meshy-6-lite's 2K cap.
+ * remove_lighting true is refused on meshy-n1 / meshy-6-lite whatever the geometry, also where this
+ * tool would not forward it: stricter than the API on purpose, as the caller asked for a lighting
+ * removal the texture model cannot do. hd_texture true beside "2k" is refused as in
+ * checkTextureResolution. With should_texture false the API ignores texture_model, so this
+ * returns undefined (nothing sent) and only the geometry's texture rules apply.
+ */
+export function resolveTextureModel(
+  model: string,
+  smartTopology: boolean,
+  params: {
+    texture_model?: string;
+    should_texture?: boolean;
+    texture_prompt?: string;
+    enable_pbr?: boolean;
+    texture_resolution?: string;
+    hd_texture?: boolean;
+    remove_lighting?: boolean;
+    should_remesh?: boolean;
+    topology?: string;
+  }
+): string | undefined {
+  const textureModel = params.should_texture === false ? undefined : params.texture_model;
+  if (!textureModel) {
+    checkTextureResolution(model, params.texture_resolution, params.hd_texture,
+      "ai_model meshy-6, meshy-7.1 or latest, or texture_model meshy-7,");
+    return undefined;
+  }
+  const n1 = textureModel === AIModel.MESHY_N1;
+  if (n1 && params.texture_prompt?.trim()) {
+    throw new RequestValidationError(
+      "texture_model meshy-n1 takes no texture_prompt: it textures from reference images alone " +
+      "(texture_image_url / texture_image_urls, else the input image). " +
+      "Drop texture_prompt, or use texture_model meshy-7 for a texture described in words."
+    );
+  }
+  if (n1 && params.enable_pbr) {
+    throw new RequestValidationError(
+      "texture_model meshy-n1 makes a base color texture only, so enable_pbr must be false. Use texture_model meshy-7 for PBR maps."
+    );
+  }
+  checkTextureResolution(textureModel, params.texture_resolution, params.hd_texture, "texture_model meshy-7");
+  if (isTwoKTextureModel(textureModel) && params.remove_lighting) {
+    throw new RequestValidationError(
+      `texture_model ${textureModel} does not remove lighting, so remove_lighting must not be true. ` +
+      "Only the Meshy 6 texture model (ai_model meshy-6 without texture_model) uses it."
+    );
+  }
+  const remeshed = params.should_remesh ?? isLiteModel(model);
+  if (n1 && !smartTopology && remeshed && params.topology === "quad") {
+    throw new RequestValidationError(
+      "texture_model meshy-n1 cannot texture a quad remesh" +
+      (params.should_remesh === undefined ? " (meshy-6-lite remeshes by default)" : "") +
+      ". Use topology triangle, should_remesh false, or texture_model meshy-7."
+    );
+  }
+  return textureModel;
+}
+
 /** Multi-view texture (texture_image_urls) on multi-image-to-3d. */
 export function checkMultiViewTexture(model: string, params: {
   texture_image_urls?: string[];
   texture_image_url?: string;
   texture_prompt?: string;
   should_texture?: boolean;
+  texture_model?: string;
 }) {
   if (!params.texture_image_urls?.length) return;
-  if (!isMeshy71(model)) {
-    throw new RequestValidationError(`texture_image_urls requires ai_model meshy-7.1 or latest, but "${model}" was given.`);
+  if (!isMeshy71(model) && !isMultiViewTextureModel(params.texture_model)) {
+    throw new RequestValidationError(
+      `texture_image_urls requires ai_model meshy-7.1 or latest, or texture_model meshy-7 or meshy-n1, but ai_model "${model}" was given.`
+    );
   }
   if (params.texture_image_url || params.texture_prompt) {
     throw new RequestValidationError("texture_image_urls cannot be combined with texture_image_url or texture_prompt.");

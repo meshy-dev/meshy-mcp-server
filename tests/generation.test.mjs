@@ -527,3 +527,182 @@ test("retired Meshy T1 (meshy-t1, model_type lowpoly) is rejected by the generat
     assert.equal(schema.safeParse({ ...input, model_type: "lowpoly" }).success, false, `${name} lowpoly`);
   }
 });
+
+// texture_model on image / multi-image to 3D (PRO-4335): the C3 enums, forwarding, the client-side
+// refusals that mirror the API's 400s, and the C2 guide in the descriptions and instructions.
+const IMAGE = ["meshy_image_to_3d", { input_task_id: "offline-image" }];
+const MULTI = ["meshy_multi_image_to_3d", { image_urls: ["https://example.invalid/a.png"] }];
+
+function registeredTools() {
+  const tools = new Map();
+  registerGenerationTools(
+    { registerTool(name, config, handler) { tools.set(name, { ...config, handler }); } },
+    { async post() { throw new Error("must not post"); } },
+  );
+  return tools;
+}
+
+test("texture_model enums: image takes meshy-7 / meshy-n1 / meshy-6-lite, multi-image meshy-7 / meshy-n1", () => {
+  const tools = registeredTools();
+  const accepts = ([name, input], texture_model) =>
+    tools.get(name).inputSchema.safeParse({ ...input, texture_model }).success;
+  for (const value of ["meshy-7", "meshy-n1", "meshy-6-lite"]) assert.equal(accepts(IMAGE, value), true, value);
+  for (const value of ["meshy-7", "meshy-n1"]) assert.equal(accepts(MULTI, value), true, value);
+  for (const value of ["meshy-6", "meshy-7.1", "latest", "meshy-t2"]) {
+    assert.equal(accepts(IMAGE, value), false, `image ${value}`);
+    assert.equal(accepts(MULTI, value), false, `multi ${value}`);
+  }
+  assert.equal(accepts(MULTI, "meshy-6-lite"), false, "multi meshy-6-lite");
+});
+
+test("texture_model is sent only when set and textured", async () => {
+  const { call } = createHarness();
+  for (const [tool, source] of [IMAGE, MULTI]) {
+    const { body: omitted } = await call(tool, source);
+    assert.equal("texture_model" in omitted, false, tool);
+    const { body: set } = await call(tool, { ...source, texture_model: "meshy-n1" });
+    assert.equal(set.texture_model, "meshy-n1", tool);
+    // The API ignores texture_model untextured, so its rules do not apply either.
+    const { body: untextured } = await call(tool, {
+      ...source, texture_model: "meshy-n1", should_texture: false, enable_pbr: true,
+    });
+    assert.equal("texture_model" in untextured, false, tool);
+    assert.equal(untextured.should_texture, false, tool);
+  }
+});
+
+test("C2 pairs reach the API as the guide names them", async () => {
+  const { call } = createHarness();
+  const { body: character } = await call("meshy_image_to_3d", {
+    input_task_id: "offline-image", ai_model: "meshy-t2.5", target_polycount: 15000, texture_model: "meshy-n1",
+  });
+  assert.deepEqual(
+    [character.ai_model, character.model_type, character.target_polycount, character.texture_model],
+    ["meshy-t2.5", "smart-topology", 15000, "meshy-n1"],
+  );
+  const { body: props } = await call("meshy_image_to_3d", {
+    input_task_id: "offline-image", ai_model: "meshy-t2", texture_model: "meshy-n1",
+  });
+  assert.deepEqual([props.ai_model, props.model_type, props.texture_model], ["meshy-t2", "smart-topology", "meshy-n1"]);
+  const { body: hero } = await call("meshy_image_to_3d", {
+    input_task_id: "offline-image", ai_model: "meshy-7.1", texture_model: "meshy-7", enable_pbr: true, texture_resolution: "8k",
+  });
+  assert.deepEqual([hero.texture_model, hero.enable_pbr, hero.texture_resolution], ["meshy-7", true, "8k"]);
+  const { path, body: photos } = await call("meshy_multi_image_to_3d", {
+    image_urls: ["https://example.invalid/a.png", "https://example.invalid/b.png"], ai_model: "meshy-7.1", texture_model: "meshy-7",
+  });
+  assert.equal(path, "/openapi/v1/multi-image-to-3d");
+  assert.equal(photos.texture_model, "meshy-7");
+  const { body: drafts } = await call("meshy_image_to_3d", {
+    input_task_id: "offline-image", ai_model: "meshy-6-lite", texture_model: "meshy-6-lite",
+  });
+  assert.deepEqual([drafts.ai_model, drafts.texture_model], ["meshy-6-lite", "meshy-6-lite"]);
+});
+
+test("resolution follows the texture model, not the geometry", async () => {
+  const { call } = createHarness();
+  // meshy-7 lifts meshy-6-lite's 2K cap (API: image/multi meshy-6-lite + meshy-7 at 8K).
+  for (const [tool, source] of [IMAGE, MULTI]) {
+    const { body } = await call(tool, {
+      ...source, ai_model: "meshy-6-lite", texture_model: "meshy-7", texture_resolution: "8k", enable_pbr: true,
+    });
+    assert.deepEqual([body.ai_model, body.texture_model, body.texture_resolution, body.enable_pbr],
+      ["meshy-6-lite", "meshy-7", "8k", true], tool);
+  }
+  // 2K-only texture models on a 4K/8K-capable geometry accept 2k.
+  const { body } = await call("meshy_image_to_3d", {
+    input_task_id: "offline-image", ai_model: "meshy-7.1", texture_model: "meshy-6-lite", texture_resolution: "2k", enable_pbr: true,
+  });
+  assert.deepEqual([body.texture_model, body.texture_resolution, body.enable_pbr], ["meshy-6-lite", "2k", true]);
+});
+
+test("allowed texture_model options pass through", async () => {
+  const { call } = createHarness();
+  // remove_lighting false asks for nothing meshy-n1 / meshy-6-lite cannot do.
+  const { body: lightingOff } = await call("meshy_image_to_3d", {
+    input_task_id: "offline-image", ai_model: "meshy-6", texture_model: "meshy-6-lite", remove_lighting: false,
+  });
+  assert.equal(lightingOff.remove_lighting, false);
+  // meshy-7 on meshy-6 takes remove_lighting (the API ignores it) and a quad remesh.
+  const { body: meshy7 } = await call("meshy_image_to_3d", {
+    input_task_id: "offline-image", ai_model: "meshy-6", texture_model: "meshy-7",
+    remove_lighting: true, should_remesh: true, topology: "quad", texture_prompt: "bronze",
+  });
+  assert.deepEqual([meshy7.texture_model, meshy7.remove_lighting, meshy7.topology, meshy7.texture_prompt],
+    ["meshy-7", true, "quad", "bronze"]);
+  // meshy-n1: quad without a remesh, a reference image, and Smart Topology (topology is not sent there).
+  const { body: n1 } = await call("meshy_image_to_3d", {
+    input_task_id: "offline-image", ai_model: "meshy-7.1", texture_model: "meshy-n1",
+    topology: "quad", texture_image_url: "https://example.invalid/front.png",
+  });
+  assert.deepEqual([n1.texture_model, n1.texture_image_url], ["meshy-n1", "https://example.invalid/front.png"]);
+  const { body: n1Smart } = await call("meshy_image_to_3d", {
+    input_task_id: "offline-image", ai_model: "meshy-t2.5", texture_model: "meshy-n1", topology: "quad", should_remesh: true,
+  });
+  assert.equal("topology" in n1Smart, false);
+  // meshy-6-lite takes a quad remesh.
+  const { body: lite } = await call("meshy_image_to_3d", {
+    input_task_id: "offline-image", ai_model: "meshy-7.1", texture_model: "meshy-6-lite", should_remesh: true, topology: "quad",
+  });
+  assert.deepEqual([lite.texture_model, lite.topology], ["meshy-6-lite", "quad"]);
+});
+
+test("multi-image texture_image_urls opens to meshy-6 / meshy-6-lite with texture_model meshy-7 or meshy-n1", async () => {
+  const { call } = createHarness();
+  const texture_image_urls = ["https://example.invalid/front.png", "https://example.invalid/back.png"];
+  for (const ai_model of ["meshy-6", "meshy-6-lite"]) {
+    for (const texture_model of ["meshy-7", "meshy-n1"]) {
+      const { body } = await call("meshy_multi_image_to_3d", { ...MULTI[1], ai_model, texture_model, texture_image_urls });
+      assert.deepEqual([body.ai_model, body.texture_model, body.texture_image_urls], [ai_model, texture_model, texture_image_urls]);
+    }
+    // Without a multi-view texture model, the geometry's own texture reads no slots.
+    await createHarness().invalid("meshy_multi_image_to_3d", { ...MULTI[1], ai_model, texture_image_urls });
+  }
+});
+
+for (const [label, [tool, source], input, message] of [
+  ["meshy-n1 with texture_prompt", IMAGE, { texture_model: "meshy-n1", texture_prompt: "rusty metal" }, /meshy-n1 takes no texture_prompt/],
+  ["meshy-n1 with texture_prompt (multi)", MULTI, { texture_model: "meshy-n1", texture_prompt: "rusty metal" }, /meshy-n1 takes no texture_prompt/],
+  ["meshy-n1 with enable_pbr", IMAGE, { texture_model: "meshy-n1", enable_pbr: true }, /enable_pbr must be false/],
+  ["meshy-n1 with enable_pbr (multi)", MULTI, { texture_model: "meshy-n1", enable_pbr: true }, /enable_pbr must be false/],
+  ["meshy-n1 at 4k", IMAGE, { texture_model: "meshy-n1", texture_resolution: "4k" }, /meshy-n1 supports 2k textures only. Use texture_model meshy-7/],
+  ["meshy-n1 at 8k (multi)", MULTI, { texture_model: "meshy-n1", texture_resolution: "8k" }, /2k textures only/],
+  ["meshy-n1 with hd_texture", IMAGE, { texture_model: "meshy-n1", hd_texture: true }, /2k textures only/],
+  ["meshy-n1 with remove_lighting", IMAGE, { ai_model: "meshy-6", texture_model: "meshy-n1", remove_lighting: true }, /does not remove lighting/],
+  ["meshy-n1 with remove_lighting (multi)", MULTI, { texture_model: "meshy-n1", remove_lighting: true }, /does not remove lighting/],
+  ["meshy-n1 quad remesh", IMAGE, { texture_model: "meshy-n1", should_remesh: true, topology: "quad" }, /quad remesh\. Use topology triangle/],
+  ["meshy-n1 quad on meshy-6-lite's default remesh", MULTI, { ai_model: "meshy-6-lite", texture_model: "meshy-n1", topology: "quad" }, /meshy-6-lite remeshes by default/],
+  ["meshy-6-lite at 4k", IMAGE, { ai_model: "meshy-7.1", texture_model: "meshy-6-lite", texture_resolution: "4k" }, /meshy-6-lite supports 2k textures only. Use texture_model meshy-7/],
+  ["meshy-6-lite at 8k on T2.5", IMAGE, { ai_model: "meshy-t2.5", texture_model: "meshy-6-lite", texture_resolution: "8k" }, /2k textures only/],
+  ["meshy-6-lite with remove_lighting", IMAGE, { ai_model: "meshy-6", texture_model: "meshy-6-lite", remove_lighting: true }, /meshy-6-lite does not remove lighting/],
+  ["meshy-6-lite geometry at 4k without texture_model", IMAGE, { ai_model: "meshy-6-lite", texture_resolution: "4k" }, /or texture_model meshy-7, for 4k\/8k/],
+]) {
+  test(`rejects texture_model ${label} before posting`, async () => {
+    const tools = registeredTools();
+    const { inputSchema, handler } = tools.get(tool);
+    const result = await handler(inputSchema.parse({ ...source, ...input }));
+    assert.equal(result.isError, true, label);
+    assert.match(result.content[0].text, message);
+  });
+}
+
+test("the C2 guide is in both tool descriptions and the server instructions, with the Models link", async () => {
+  const { MODEL_CHOICE_GUIDE, MODELS_DOC_URL } = await import("../dist/model-guide.js");
+  const { MESHY_INSTRUCTIONS } = await import("../dist/instructions.js");
+  assert.equal(MODELS_DOC_URL, "https://docs.meshy.ai/en/api/models");
+  const rows = [
+    "Detailed hero asset, product render, cinematic prop: meshy-7.1 + meshy-7 (PBR, up to 8K)",
+    "Game character to rig and animate: meshy-t2.5 (smart topology, set target_polycount) + meshy-n1",
+    "Many props for a game scene, or user-generated content: meshy-t2 (smart topology) + meshy-n1",
+    "A real object from 2 to 4 photos: meshy-7.1 on Multi-Image to 3D + meshy-7",
+    "A model to 3D print: meshy-7.1 + none, or meshy-7 to print in color",
+    "Many drafts at a low cost: meshy-6-lite + meshy-6-lite",
+  ];
+  for (const row of rows) assert.ok(MODEL_CHOICE_GUIDE.includes(row), row);
+  assert.ok(MODEL_CHOICE_GUIDE.endsWith(`More: ${MODELS_DOC_URL}`));
+  const tools = registeredTools();
+  for (const name of ["meshy_image_to_3d", "meshy_multi_image_to_3d"]) {
+    assert.ok(tools.get(name).description.includes(MODEL_CHOICE_GUIDE), name);
+  }
+  assert.ok(MESHY_INSTRUCTIONS.includes(MODEL_CHOICE_GUIDE));
+});

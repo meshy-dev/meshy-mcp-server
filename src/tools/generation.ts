@@ -15,8 +15,10 @@ import {
   checkMultiViewTexture,
   checkTextureResolution,
   resolveGenerationOptions,
+  resolveTextureModel,
   supportsImageEnhancement
 } from "../utils/generation-options.js";
+import { MODEL_CHOICE_GUIDE } from "../model-guide.js";
 import {
   CreateTaskApiResponse,
   TextTo3DApiRequest,
@@ -129,14 +131,17 @@ Examples:
     {
       title: "Generate 3D Model from Image",
       description: `Generate a 3D model from one image, textured by default (no refine step; should_texture false for a bare mesh). Typically 2–3 minutes.
-Cost: meshy-7.1 / latest / meshy-6 20 mesh only, 30 textured, 35 at 8K; meshy-6-lite 5 / 15; meshy-t2 / meshy-t2.5 5 / 15 / 20 at 8K; Ultra geometry +5.
+Cost: the mesh (meshy-7.1 / latest / meshy-6 20; meshy-6-lite, meshy-t2, meshy-t2.5 5) + 10 for the texture (15 at 8K), whichever texture_model; Ultra geometry +5.
 
 IMAGE INPUT (exactly ONE):
   - file_path: a local image (RECOMMENDED; never base64-encode it yourself)
   - image_url: a public URL
   - input_task_id: a SUCCEEDED meshy_text_to_image / meshy_image_to_image task with ONE image (multi-view output → meshy_multi_image_to_3d)
 
-Example: { file_path: "/path/to/character.png", pose_mode: "t-pose" }`,
+${MODEL_CHOICE_GUIDE}
+Omit texture_model for the geometry's default; "none" is should_texture false; 2 to 4 photos go to meshy_multi_image_to_3d.
+
+Example (game character): { file_path: "/path/to/character.png", ai_model: "meshy-t2.5", target_polycount: 15000, texture_model: "meshy-n1", pose_mode: "t-pose" }`,
       inputSchema: ImageTo3DInputSchema,
       outputSchema: TaskCreatedOutputSchema,
       annotations: {
@@ -149,12 +154,14 @@ Example: { file_path: "/path/to/character.png", pose_mode: "t-pose" }`,
     async (params: z.infer<typeof ImageTo3DInputSchema>) => {
       try {
         const options = resolveGenerationOptions(params, "image");
+        const textureModel = resolveTextureModel(options.ai_model, options.smartTopology, params);
         const request: ImageTo3DApiRequest = {
           enable_pbr: params.enable_pbr,
           moderation: false,
           ai_model: options.ai_model,
           model_type: options.model_type,
         };
+        if (textureModel !== undefined) request.texture_model = textureModel;
         if (options.geometry_resolution !== undefined)
           request.geometry_resolution = options.geometry_resolution;
         if (options.ultra_mode !== undefined)
@@ -191,7 +198,6 @@ Example: { file_path: "/path/to/character.png", pose_mode: "t-pose" }`,
         if (params.texture_image_url) {
           request.texture_image_url = params.texture_image_url;
         }
-        checkTextureResolution(options.ai_model, params.texture_resolution, params.hd_texture);
         if (params.texture_resolution !== undefined) {
           request.texture_resolution = params.texture_resolution;
         }
@@ -349,14 +355,17 @@ Example: { preview_task_id: "abc-123", texture_prompt: "rusty metal", enable_pbr
     {
       title: "Generate 3D Model from Multiple Images",
       description: `Generate a 3D model from 1–4 views of the same object (better reconstruction), textured by default.
-Cost: meshy-7.1 / latest / meshy-6 20 mesh only, 30 textured, 35 at 8K; meshy-6-lite 5 / 15; Ultra geometry +5.
+Cost: the mesh (meshy-7.1 / latest / meshy-6 20; meshy-6-lite 5) + 10 for the texture (15 at 8K), whichever texture_model; Ultra geometry +5.
 
 IMAGE INPUT (exactly ONE):
   - file_paths: 1–4 local images (never base64-encode them yourself)
   - image_urls: 1–4 public URLs
   - input_task_id: a SUCCEEDED meshy_text_to_image / meshy_image_to_image task (multi-view included); its images are the input
 
-Example: { file_paths: ["/path/front.jpg", "/path/side.jpg"] }`,
+${MODEL_CHOICE_GUIDE}
+Omit texture_model for the geometry's default; "none" is should_texture false; smart topology (meshy-t2.5 / meshy-t2) is meshy_image_to_3d only.
+
+Example (real object from photos): { file_paths: ["/path/front.jpg", "/path/side.jpg"], ai_model: "meshy-7.1", texture_model: "meshy-7" }`,
       inputSchema: MultiImageTo3DInputSchema,
       outputSchema: TaskCreatedOutputSchema,
       annotations: {
@@ -370,12 +379,13 @@ Example: { file_paths: ["/path/front.jpg", "/path/side.jpg"] }`,
       try {
         const options = resolveGenerationOptions(params, "multi-image");
         checkMultiViewTexture(options.ai_model, params);
-        checkTextureResolution(options.ai_model, params.texture_resolution, params.hd_texture);
+        const textureModel = resolveTextureModel(options.ai_model, false, params);
         const request: MultiImageTo3DApiRequest = {
           enable_pbr: params.enable_pbr,
           moderation: false,
           ai_model: options.ai_model,
         };
+        if (textureModel !== undefined) request.texture_model = textureModel;
         if (options.geometry_resolution !== undefined) {
           request.geometry_resolution = options.geometry_resolution as
             | "standard"

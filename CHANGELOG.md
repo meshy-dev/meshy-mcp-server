@@ -4,13 +4,24 @@
 
 ### Added
 
+- `texture_model` on `meshy_image_to_3d` (`meshy-7`, `meshy-n1`, `meshy-6-lite`) and
+  `meshy_multi_image_to_3d` (`meshy-7`, `meshy-n1`): the texture model, picked apart from the
+  geometry, in the same task and at the same price. It is sent only when given, and not with
+  `should_texture: false` (the API ignores it there). The texture rules follow the texture model:
+  `meshy-7` takes 4K / 8K on a `meshy-6-lite` geometry too, and opens `texture_image_urls` on
+  `meshy-6` / `meshy-6-lite` multi-image; `meshy-n1` refuses `texture_prompt`, `enable_pbr: true`,
+  4K / 8K, `hd_texture`, `remove_lighting: true` and a quad remesh (including `meshy-6-lite`'s
+  default remesh); `meshy-6-lite` refuses 4K / 8K and `remove_lighting: true`. All are refused
+  before any request. The two tool descriptions and the server instructions carry the "choose
+  models by project" guide, with the [Models](https://docs.meshy.ai/en/api/models) page link
+
 - `ai_model: "meshy-n1"` (Meshy N1) on `meshy_retexture`: a 2K base color texture from reference
   images only, for 10 credits. It takes one image (`image_style_url`, read as the front view) or
   1–4 views (`multiview_image_urls`, front view first, the others in any order); multi-view now
   accepts `meshy-n1` as well as `meshy-7`, and still sends `meshy-7` when no model or `latest` is
   given. A text prompt (even beside an image), `enable_pbr: true`, `texture_resolution` `4k` / `8k`,
   `hd_texture: true` and `remove_lighting` are refused before any request. The generation tools do
-  not accept `meshy-n1`.
+  not accept `meshy-n1` as `ai_model` (image / multi-image take it as `texture_model`, below).
 
 ## [0.6.7] - 2026-10-30
 
