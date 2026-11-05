@@ -25,11 +25,12 @@
 - **Text to 3D**: Generate 3D models from text descriptions (preview + refine pipeline)
 - **Image to 3D**: Convert single or multiple images into 3D models
 - **Meshy 7.1 (v0.6.0)**: `ai_model: "meshy-7.1"` (and `latest`) on text-to-3d, image-to-3d and multi-image-to-3d. `geometry_resolution: "standard" | "2k" | "4k"` picks the geometry pass (+5 credits for 2k/4k; multi-image supports standard/2k). `ultra_mode` is deprecated
-- **Meshy 6 Lite (v0.6.0)**: `ai_model: "meshy-6-lite"` — fast, 5-credit mesh (15 textured, 2K textures only) on every generation endpoint
+- **Meshy 6 Lite (v0.6.0)**: `ai_model: "meshy-6-lite"` — fast, 5-credit mesh (15 textured, 2K textures only unless `texture_model: "meshy-7"`) on every generation endpoint
 - **Smart Topology**: `model_type: "smart-topology"` with `ai_model: "meshy-t2"` on text-to-3d (new in v0.6.0) and image-to-3d. Clean, part-separated triangle mesh generated directly at 100–15,000 faces (default 4,000) for 5 credits of mesh. `meshy-t2.5` (v0.6.4) is the newest Smart Topology model, with sharper detail for game assets: 100–30,000 faces (default 15,000), same cost
 - **Multi-view texture on multi-image (v0.6.0)**: `texture_image_urls` — 1–4 views of the same object drive the texture (Meshy 7.1)
 - **8K Textures (v0.5.0)**: `texture_resolution: "2k" | "4k" | "8k"` on image-to-3d, multi-image-to-3d, text-to-3d refine and retexture (8K costs 15 credits vs 10). Replaces the now-deprecated `hd_texture` flag
 - **Multi-view Retexture (v0.5.0)**: `multiview_image_urls` — 1–4 views of the *same object*, front view first, drive the texture instead of a single style reference (requires Meshy 7 or Meshy N1)
+- **Texture model on image / multi-image to 3D**: `texture_model` picks the texture model apart from the geometry, in the same task and at the same price: `meshy-7` (PBR, up to 8K), `meshy-n1` (2K base color from reference images only) or `meshy-6-lite` (2K, single-image only). Omitted, the geometry's default is used. Options a texture model can't do (for example `meshy-n1` with `texture_prompt`, `enable_pbr: true` or 4K) are refused before any request. The tool descriptions and server instructions carry a short "choose models by project" guide, with the [Models](https://docs.meshy.ai/en/api/models) page for detail
 - **Meshy N1 Retexture**: `ai_model: "meshy-n1"` on `meshy_retexture` — a 2K base color texture from reference images only: one image (`image_style_url`, read as the front view) or 1–4 views (`multiview_image_urls`, front first, the rest in any order). 10 credits. No text prompt, PBR maps, 4K/8K or `remove_lighting`: the tool refuses those before any request
 - **Auto-Rigging & Animation**: Add skeletons and animations to humanoid characters. `meshy_animate` takes one preset action, up to 10 actions as clips in one file, or a generated motion (v0.6.3); `meshy_list_animations` finds action ids
 - **Text to Motion (v0.6.3)**: generate a motion clip from a description (`prime` FBX, 10 credits / `swift` BVH, 3 credits) and apply it to a rigged character
@@ -58,6 +59,8 @@
 | `meshy_multi_image_to_3d` | `meshy-7.1`, `meshy-6`, `meshy-6-lite`, `latest` (no Smart Topology) | Meshy 7.1 |
 | `meshy_retexture` | `meshy-7`, `meshy-6`, `meshy-6-lite`, `meshy-n1` (image-only, 2K base color), `latest` (no `meshy-7.1`) | Meshy 7 |
 
+`meshy_image_to_3d` also takes `texture_model` (`meshy-7`, `meshy-n1`, `meshy-6-lite`) and `meshy_multi_image_to_3d` takes `meshy-7` or `meshy-n1`. Without it, Meshy 7.1 / `latest` / Smart Topology texture with Meshy 7, `meshy-6` with Meshy 6 and `meshy-6-lite` with Meshy 6 Lite. Which pair to pick per project: [Models](https://docs.meshy.ai/en/api/models#choose-by-project).
+
 Legacy id still accepted: `meshy-7` on generation (deprecated, billed like `meshy-7.1`). `meshy-5` and Meshy T1 (`meshy-t1`, `model_type: "lowpoly"`) are retired and no longer accepted; use `meshy-6-lite` and `smart-topology` + `meshy-t2.5`.
 
 Generation cost ([pricing](https://docs.meshy.ai/en/api/pricing)):
@@ -66,10 +69,10 @@ Generation cost ([pricing](https://docs.meshy.ai/en/api/pricing)):
 |---|---|---|---|
 | `meshy-7.1` / `latest` | 20 | 30 | 35 |
 | `meshy-6` | 20 | 30 | 35 |
-| `meshy-6-lite` | 5 | 15 | — (2K only) |
+| `meshy-6-lite` | 5 | 15 | 20 (`texture_model: "meshy-7"` only) |
 | `meshy-t2` / `meshy-t2.5` (smart-topology, single-image) | 5 | 15 | 20 |
 
-Text-to-3D preview is billed mesh-only; refine adds 10 (15 at 8K). `geometry_resolution: "2k"` or `"4k"` (Ultra pass, Meshy 7.1 / `latest`) adds **+5**; multi-image supports `"2k"` only. `ultra_mode` is deprecated and maps to `"2k"`.
+`texture_model` doesn't change the price: a textured task costs the mesh plus the texture at its resolution. 4K / 8K need the Meshy 7 or Meshy 6 texture model. Text-to-3D preview is billed mesh-only; refine adds 10 (15 at 8K). `geometry_resolution: "2k"` or `"4k"` (Ultra pass, Meshy 7.1 / `latest`) adds **+5**; multi-image supports `"2k"` only. `ultra_mode` is deprecated and maps to `"2k"`.
 
 Smart Topology generates directly at `target_polycount` and skips remeshing: `meshy-t2` 100–15,000 faces (default 4,000), `meshy-t2.5` 100–30,000 (default 15,000). Without `ai_model`, `model_type: "smart-topology"` uses `meshy-t2`. Output is triangle-only. For standard models, `target_polycount` needs `should_remesh: true` and is overridden by `decimation_mode`.
 

@@ -4,6 +4,8 @@
  * Specific parameter details and constraints live in each tool's description.
  */
 
+import { MODEL_CHOICE_GUIDE } from "./model-guide.js";
+
 export const MESHY_INSTRUCTIONS = `
 # Meshy AI — Workflow Guide
 
@@ -11,7 +13,7 @@ Every create tool returns {task_id, status}, except meshy_creative_lab, which wa
 Earlier results: meshy_list_models lists finished 3D models (image-to-3d by default; task_types widens it); meshy_list_tasks lists tasks of any status (default: text-to-3d, image-to-3d, multi-image-to-3d, text-to-image, image-to-image; task_types widens it, so an empty default list does not mean there are no printing, rigging or Creative Lab tasks).
 
 ## Rule 1: Cost Confirmation
-Before calling ANY tool that costs credits, ask which ai_model to use where there is a choice (prefer an explicit one), present the cost and wait for user confirmation.
+Before calling ANY tool that costs credits, ask which ai_model to use where there is a choice (prefer an explicit one; on meshy_image_to_3d / meshy_multi_image_to_3d also the texture_model, suggesting a pair from "Choosing Models" below), present the cost and wait for user confirmation.
 
 | Tool | Credits |
 |------|---------|
@@ -30,11 +32,15 @@ Before calling ANY tool that costs credits, ask which ai_model to use where ther
 | image / multi-image ai_model | mesh only | + 2K/4K texture | + 8K texture |
 |---|---|---|---|
 | meshy-7.1 / latest / meshy-6 (and deprecated meshy-7) | 20 | 30 | 35 |
-| meshy-6-lite | 5 | 15 | — (2K only) |
+| meshy-6-lite | 5 | 15 | 20 (texture_model meshy-7 only) |
 | meshy-t2 / meshy-t2.5 (single-image Smart Topology) | 5 | 15 | 20 |
 
-Ultra geometry (geometry_resolution "2k"/"4k") adds 5 on meshy-7.1 / latest. Confirm the 8K and Ultra surcharges explicitly.
+texture_model never changes the price; 4K/8K need the meshy-7 or meshy-6 texture model. Ultra geometry (geometry_resolution "2k"/"4k") adds 5 on meshy-7.1 / latest. Confirm the 8K and Ultra surcharges explicitly.
 Prices match https://docs.meshy.ai/en/api/pricing as of 2026-10-12; point the user there if a number looks off.
+
+## Choosing Models (meshy_image_to_3d / meshy_multi_image_to_3d)
+${MODEL_CHOICE_GUIDE}
+Omit texture_model for the geometry's default; "none" is should_texture false; smart topology (meshy-t2.5 / meshy-t2) is single-image only. A texture model refuses options it cannot do (e.g. meshy-n1: no texture_prompt, enable_pbr or 4K); the tool says so before any charge.
 
 ## Rule 2: Never Re-create a Task You Are Unsure About
 If a create call fails with a timeout, network error or 5xx, the task may still have been created and charged. Check meshy_list_tasks (task_type = that task's type) for it before calling the create tool again. A wait that times out leaves the task running: poll the same task_id again.
@@ -70,7 +76,7 @@ Suggested flow:
 ## Scenario C: Game Engine (Unity/Unreal/Godot)
 Trigger: user mentions game, Unity, Unreal, Godot, game-ready.
 Suggested flow:
-1. Generate model with target_formats:["fbx"]
+1. Generate model with target_formats:["fbx"], from an image with a game pair from Choosing Models (scene props: meshy-t2 + texture_model meshy-n1; a character: Scenario D)
 2. Textures: image-to-3d / multi-image output is already textured (unless should_texture:false); a text-to-3d preview needs meshy_text_to_3d_refine
 3. Inspect topology and face count. Smart Topology may already meet the budget; remesh only if needed and separately approved
 4. Download FBX
@@ -78,7 +84,7 @@ Suggested flow:
 ## Scenario D: Character Animation
 Trigger: user mentions rig, animate, walking, running, character animation.
 Suggested flow:
-1. Generate model with pose_mode:"t-pose"
+1. Generate model with pose_mode:"t-pose"; from an image, the game character pair (meshy-t2.5 with target_polycount + texture_model meshy-n1)
 2. Textures (rigging needs a textured humanoid): image-to-3d / multi-image output is already textured (unless should_texture:false); a text-to-3d preview needs meshy_text_to_3d_refine
 3. Rig the model (meshy_rig, ≤300K faces; if over, remesh to reduce polycount first)
 4. Download — rigging includes walking+running free, as separate files. For other actions use meshy_animate:

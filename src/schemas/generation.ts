@@ -16,6 +16,7 @@ import {
   ResponseFormatSchema,
   UrlSchema
 } from "./common.js";
+import { IMAGE_TEXTURE_MODELS, MULTI_IMAGE_TEXTURE_MODELS } from "../utils/generation-options.js";
 
 // Standard generation models, in AIModel order. Listed instead of
 // z.nativeEnum(AIModel), which also holds the retexture-only meshy-n1.
@@ -42,7 +43,7 @@ const hdTexture = () =>
     .describe("Deprecated: use texture_resolution '4k'.");
 const textureResolution = () =>
   z.nativeEnum(TextureResolution).optional()
-    .describe("Base color texture: 2k (default), 4k or 8k (+5 credits; PBR maps stay 4K, no emission map). 4k/8k not on meshy-6-lite.");
+    .describe("Base color texture: 2k (default), 4k or 8k (+5 credits; PBR maps stay 4K, no emission map). 4k/8k need the meshy-7 or meshy-6 texture model: not meshy-6-lite or meshy-n1.");
 const multiViewThumbnails = () =>
   z.boolean().optional()
     .describe("Also return front/back/left/right thumbnails.");
@@ -54,14 +55,14 @@ const deprecatedUltraMode = () =>
     .describe("Deprecated: use geometry_resolution '2k'.");
 const lightingRemoval = () =>
   z.boolean().optional()
-    .describe("Remove highlights/shadows from the base color (meshy-6 only; API default true there).");
-const generationTexturePrompt = () =>
+    .describe("Remove highlights/shadows from the base color (Meshy 6 texture model only: ai_model meshy-6 without texture_model; API default true there). Not true with texture_model meshy-n1 / meshy-6-lite.");
+const generationTexturePrompt = (note = "") =>
   z.string()
     .max(800, "Texture prompt must not exceed 800 characters")
     .optional()
-    .describe("Text to guide texturing (max 800 characters).");
-const textureImageUrl = () =>
-  UrlSchema.optional().describe("Image URL to guide texturing.");
+    .describe(`Text to guide texturing (max 800 characters).${note}`);
+const textureImageUrl = (note = "") =>
+  UrlSchema.optional().describe(`Image URL to guide texturing.${note}`);
 const deprecatedSymmetryMode = () =>
   z.nativeEnum(SymmetryMode).optional()
     .describe("Deprecated: has no effect.");
@@ -84,9 +85,14 @@ const shouldRemesh = () =>
 const shouldTexture = () =>
   z.boolean().optional()
     .describe("Generate textures (default true); false gives a cheaper untextured mesh.");
-const enablePbr = () =>
+const enablePbr = (note = "") =>
   z.boolean().default(false)
-    .describe("Also make metallic/roughness/normal maps.");
+    .describe(`Also make metallic/roughness/normal maps.${note}`);
+// Notes for the image / multi-image fields that texture_model meshy-n1 refuses or reads.
+const NOT_ON_N1 = " Not with texture_model meshy-n1.";
+const N1_FRONT_VIEW = " With texture_model meshy-n1, the front view it textures from.";
+const textureModelDefaults = "Omit for the geometry's default: meshy-7 (meshy-7.1, latest, meshy-t2, meshy-t2.5), meshy-6 (meshy-6), meshy-6-lite (meshy-6-lite). Same price whichever; ignored with should_texture false.";
+const N1_LIMITS = "no texture_prompt, enable_pbr, 4k/8k, remove_lighting or quad remesh";
 const imageEnhancement = () =>
   z.boolean().optional()
     .describe("Optimize the input image (meshy-6/7.1/latest); false keeps deliberate styling.");
@@ -155,15 +161,18 @@ export const ImageTo3DInputSchema = z.object({
   ultra_mode: deprecatedUltraMode(),
   model_type: modelType(),
   pose_mode: poseMode(),
-  enable_pbr: enablePbr(),
+  texture_model: z.enum(IMAGE_TEXTURE_MODELS)
+    .optional()
+    .describe(`Texture model, picked apart from the geometry: meshy-7 (PBR, 2K/4K/8K), meshy-n1 (2K base color from the input image, or texture_image_url as the front view; ${N1_LIMITS}), meshy-6-lite (2K, lowest cost; no remove_lighting). ${textureModelDefaults}`),
+  enable_pbr: enablePbr(NOT_ON_N1),
   topology: topology(),
   target_polycount: polycount("Standard: remesh target 100–300,000, needs should_remesh true. Smart Topology: meshy-t2 100–15,000 (default 4,000), meshy-t2.5 100–30,000 (default 15,000)."),
   decimation_mode: decimationMode(),
   should_remesh: shouldRemesh(),
   symmetry_mode: deprecatedSymmetryMode(),
   should_texture: shouldTexture(),
-  texture_prompt: generationTexturePrompt(),
-  texture_image_url: textureImageUrl(),
+  texture_prompt: generationTexturePrompt(NOT_ON_N1),
+  texture_image_url: textureImageUrl(N1_FRONT_VIEW),
   texture_resolution: textureResolution(),
   hd_texture: hdTexture(),
   image_enhancement: imageEnhancement(),
@@ -225,7 +234,10 @@ export const MultiImageTo3DInputSchema = z.object({
     .describe("Ultra geometry pass: standard (default) or 2k (+5 credits); meshy-7.1/latest only. No 4k here."),
   ultra_mode: deprecatedUltraMode(),
   pose_mode: poseMode(),
-  enable_pbr: enablePbr(),
+  texture_model: z.enum(MULTI_IMAGE_TEXTURE_MODELS)
+    .optional()
+    .describe(`Texture model, picked apart from the geometry: meshy-7 (PBR, 2K/4K/8K) or meshy-n1 (2K base color from texture_image_urls / texture_image_url, else the input images, first = front; ${N1_LIMITS}). Either also allows texture_image_urls on meshy-6 / meshy-6-lite. No meshy-6-lite here. ${textureModelDefaults}`),
+  enable_pbr: enablePbr(NOT_ON_N1),
   topology: topology(),
   target_polycount: polycount("Remesh target 100–300,000, needs should_remesh true."),
   decimation_mode: decimationMode(),
@@ -237,19 +249,19 @@ export const MultiImageTo3DInputSchema = z.object({
     .optional()
     .describe("Deprecated; ignored (this endpoint has no model_type)."),
   should_texture: shouldTexture(),
-  texture_prompt: generationTexturePrompt(),
-  texture_image_url: textureImageUrl(),
+  texture_prompt: generationTexturePrompt(NOT_ON_N1),
+  texture_image_url: textureImageUrl(N1_FRONT_VIEW),
   texture_image_urls: z.array(z.string())
     .min(1)
     .max(4)
     .optional()
-    .describe("1–4 views (URLs or data URIs) of the SAME object to drive the texture; element 0 is the front. meshy-7.1/latest only; not with texture_prompt / texture_image_url."),
+    .describe("1–4 views (URLs or data URIs) of the SAME object to drive the texture; element 0 is the front. ai_model meshy-7.1/latest, or texture_model meshy-7 / meshy-n1; not with texture_prompt / texture_image_url."),
   texture_resolution: textureResolution(),
   hd_texture: hdTexture(),
   image_enhancement: imageEnhancement(),
   remove_lighting: z.boolean()
     .optional()
-    .describe("Remove highlights/shadows from the base color (meshy-6/7.1/latest; API default true)."),
+    .describe("Remove highlights/shadows from the base color (meshy-6/7.1/latest; API default true). Not true with texture_model meshy-n1."),
   save_pre_remeshed_model: savePreRemeshed(),
   target_formats: targetFormats(),
   alpha_thumbnail: alphaThumbnail(),

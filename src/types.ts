@@ -73,6 +73,7 @@ export interface ImageTo3DApiRequest {
   should_remesh?: boolean;
   symmetry_mode?: string;
   should_texture?: boolean;
+  texture_model?: string;
   texture_prompt?: string;
   texture_image_url?: string;
   texture_resolution?: string;
@@ -119,6 +120,7 @@ export interface MultiImageTo3DApiRequest {
   should_remesh?: boolean;
   symmetry_mode?: string;
   should_texture?: boolean;
+  texture_model?: string;
   texture_prompt?: string;
   texture_image_url?: string;
   texture_image_urls?: string[];
