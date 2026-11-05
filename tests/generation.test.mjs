@@ -706,3 +706,14 @@ test("the C2 guide is in both tool descriptions and the server instructions, wit
   }
   assert.ok(MESHY_INSTRUCTIONS.includes(MODEL_CHOICE_GUIDE));
 });
+
+test("agents ask the use case and steer game assets to smart topology, text route included", async () => {
+  const { MODELS_DOC_URL } = await import("../dist/model-guide.js");
+  const { MESHY_INSTRUCTIONS } = await import("../dist/instructions.js");
+  assert.match(MESHY_INSTRUCTIONS, /If the user hasn't said what the model is for .* ask before you pick models/);
+  assert.match(MESHY_INSTRUCTIONS, /from text with meshy_text_to_3d model_type:"smart-topology"/);
+  const text = registeredTools().get("meshy_text_to_3d").description;
+  assert.match(text, /PICK THE MODEL FROM THE PROJECT: ask what the model is for/);
+  assert.match(text, /model_type "smart-topology" with meshy-t2\.5/);
+  assert.ok(text.includes(`More: ${MODELS_DOC_URL}`));
+});
