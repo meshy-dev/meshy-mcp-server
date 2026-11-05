@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+## [0.6.9] - 2026-11-05
+
+### Changed
+
+- The server instructions ask what the model is for before picking models when the user hasn't
+  said, and send a game asset or a face-count budget to smart topology (`meshy-t2.5` /
+  `meshy-t2` with `target_polycount`), also on `meshy_text_to_3d`, instead of a `meshy-7.1`
+  model remeshed down. Scenario C gives the text route for game assets.
+- `meshy_text_to_3d`'s description carries the same steer and the
+  [Models](https://docs.meshy.ai/en/api/models) page link.
+
 ## [0.6.8] - 2026-11-05
 
 ### Added
