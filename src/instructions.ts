@@ -13,6 +13,7 @@ Every create tool returns {task_id, status}, except meshy_creative_lab, which wa
 Earlier results: meshy_list_models lists finished 3D models (image-to-3d by default; task_types widens it); meshy_list_tasks lists tasks of any status (default: text-to-3d, image-to-3d, multi-image-to-3d, text-to-image, image-to-image; task_types widens it, so an empty default list does not mean there are no printing, rigging or Creative Lab tasks).
 
 ## Rule 1: Cost Confirmation
+If the user hasn't said what the model is for (a game asset, a character to rig, a render, a 3D print, AR), ask before you pick models (Rule 4). A game asset or a face-count budget means smart topology (meshy-t2.5 / meshy-t2 with target_polycount), also on meshy_text_to_3d; never a meshy-7.1 model remeshed down.
 Before calling ANY tool that costs credits, ask which ai_model to use where there is a choice (prefer an explicit one; on meshy_image_to_3d / meshy_multi_image_to_3d also the texture_model, suggesting a pair from "Choosing Models" below), present the cost and wait for user confirmation.
 
 | Tool | Credits |
@@ -76,7 +77,7 @@ Suggested flow:
 ## Scenario C: Game Engine (Unity/Unreal/Godot)
 Trigger: user mentions game, Unity, Unreal, Godot, game-ready.
 Suggested flow:
-1. Generate model with target_formats:["fbx"], from an image with a game pair from Choosing Models (scene props: meshy-t2 + texture_model meshy-n1; a character: Scenario D)
+1. Generate model with target_formats:["fbx"], from an image with a game pair from Choosing Models (scene props: meshy-t2 + texture_model meshy-n1; a character: Scenario D), or from text with meshy_text_to_3d model_type:"smart-topology" + the same ai_model and target_polycount
 2. Textures: image-to-3d / multi-image output is already textured (unless should_texture:false); a text-to-3d preview needs meshy_text_to_3d_refine
 3. Inspect topology and face count. Smart Topology may already meet the budget; remesh only if needed and separately approved
 4. Download FBX

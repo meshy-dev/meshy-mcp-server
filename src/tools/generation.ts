@@ -18,7 +18,7 @@ import {
   resolveTextureModel,
   supportsImageEnhancement
 } from "../utils/generation-options.js";
-import { MODEL_CHOICE_GUIDE } from "../model-guide.js";
+import { MODEL_CHOICE_GUIDE, MODELS_DOC_URL } from "../model-guide.js";
 import {
   CreateTaskApiResponse,
   TextTo3DApiRequest,
@@ -40,6 +40,8 @@ export function registerGenerationTools(server: McpServer, client: MeshyClient) 
 Cost: 20 credits (meshy-7.1 / latest / meshy-6), 5 (meshy-6-lite, meshy-t2, meshy-t2.5); Ultra geometry +5.
 
 PREFER THE IMAGE ROUTE: for higher quality and more control, generate a design image first (meshy_text_to_image), let the user approve it, then meshy_image_to_3d with input_task_id = the image task (textured in one task). Use direct text-to-3d for a quick draft or when the user explicitly asks for it.
+
+PICK THE MODEL FROM THE PROJECT: ask what the model is for if the user hasn't said. A game asset, a character to rig, or a face-count budget: model_type "smart-topology" with meshy-t2.5 (or meshy-t2 for speed) and target_polycount, not meshy-7.1 with should_remesh. More: ${MODELS_DOC_URL}
 
 Examples:
   - Low-poly: { prompt: "dragon", model_type: "smart-topology", ai_model: "meshy-t2", target_polycount: 4000 }
