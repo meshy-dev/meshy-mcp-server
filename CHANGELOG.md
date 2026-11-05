@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.6.8] - 2026-11-05
+
 ### Added
 
 - `texture_model` on `meshy_image_to_3d` (`meshy-7`, `meshy-n1`, `meshy-6-lite`) and
