@@ -1,5 +1,12 @@
 name: Publish to npm
 
+# No npm token is stored anywhere: the package publishes through npm trusted
+# publishing (GitHub OIDC), with provenance. On npmjs.com it trusts
+# meshy-dev/meshy-mcp-server, this workflow file (publish.yml) and the
+# `release` environment, which only `main` and `v*` tags may deploy to.
+# Renaming the file or the environment breaks publishing until the npm setting
+# is recreated.
+
 on:
   release:
     types: [published]
@@ -15,9 +22,11 @@ on:
 jobs:
   publish:
     runs-on: ubuntu-latest
+    environment: release
 
     permissions:
       contents: read
+      id-token: write
 
     steps:
       - uses: actions/checkout@v5
@@ -29,20 +38,6 @@ jobs:
           node-version: 22
           registry-url: https://registry.npmjs.org
           cache: npm
-
-      # Fail fast, and say why. Both previous releases (v0.3.0, v0.4.0) ran all
-      # the way through `npm pack` and only then died with `npm error ENEEDAUTH`
-      # because this secret was not set — so the releases looked shipped while
-      # npm never received them. Checking first turns that into an obvious error.
-      - name: Verify NPM_TOKEN is configured
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: |
-          if [ -z "$NODE_AUTH_TOKEN" ]; then
-            echo "::error::NPM_TOKEN secret is not set. Add an npm Automation token with publish rights for the @meshy-ai scope under Settings → Secrets and variables → Actions."
-            exit 1
-          fi
-          echo "NPM_TOKEN is present"
 
       # Guard against tagging one version and shipping another.
       - name: Check package.json version matches the release tag
@@ -61,6 +56,10 @@ jobs:
       - run: npm run lint
       - run: npm run build
 
+      # Trusted publishing needs npm 11.5.1 or newer; Node 22 ships npm 10.
+      # Upgraded only here, so the checks above run on the stock npm.
+      - run: npm install -g npm@^11.5.1
+
+      # npm accepts the tarball before it is installable, so a green run is not
+      # yet "live": confirm against https://registry.npmjs.org/@meshy-ai/meshy-mcp-server.
       - run: npm publish --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
