@@ -64,8 +64,8 @@ export enum AIModel {
 // Smart Topology models — selected via model_type: "smart-topology" on
 // image-to-3d or text preview (T2 / T2.5 only). meshy-t2 adds native part separation with a
 // configurable target_polycount; meshy-t2.5 is the newest, with sharper detail and a
-// higher face ceiling. meshy-t2 stays the default. meshy-t1 is retired (2026-10-30) and
-// rejected locally.
+// higher face ceiling, and is the default when ai_model is omitted. meshy-t2 stays
+// available by name. meshy-t1 is retired (2026-10-30) and rejected locally.
 export enum SmartTopologyModel {
   MESHY_T2 = "meshy-t2",
   MESHY_T2_5 = "meshy-t2.5"

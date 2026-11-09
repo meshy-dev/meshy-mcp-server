@@ -11,6 +11,7 @@ import { TextToImageInputSchema, ImageToImageInputSchema } from "../schemas/imag
 import { TaskCreatedOutputSchema } from "../schemas/output.js";
 import { ResponseFormat } from "../constants.js";
 import { formatTaskCreatedResponse } from "../utils/response-formatter.js";
+import { checkImageAspectRatio, poseAspectRatioNote } from "../utils/image-options.js";
 import {
   CreateTaskApiResponse,
   TextToImageApiRequest,
@@ -53,6 +54,7 @@ Example: { ai_model: "nano-banana-pro", prompt: "game character", generate_multi
             }]
           };
         }
+        checkImageAspectRatio(params.ai_model, params.aspect_ratio);
         const request: TextToImageApiRequest = {
           ai_model: params.ai_model,
           prompt: params.prompt,
@@ -65,10 +67,11 @@ Example: { ai_model: "nano-banana-pro", prompt: "game character", generate_multi
         const response = await client.post<CreateTaskApiResponse>("/openapi/v1/text-to-image", request as unknown as Record<string, unknown>);
         const taskId = response.result;
 
+        const poseNote = poseAspectRatioNote(params.ai_model, params.pose_mode, params.aspect_ratio);
         const output = {
           task_id: taskId,
           status: "PENDING",
-          message: `Text-to-image task created successfully. Task ID: ${taskId}`,
+          message: `Text-to-image task created successfully. Task ID: ${taskId}${poseNote ? `. ${poseNote}` : ""}`,
           estimated_time: "~30 seconds"
         };
 
@@ -76,7 +79,7 @@ Example: { ai_model: "nano-banana-pro", prompt: "game character", generate_multi
           output,
           params.response_format,
           "Image Generation Task Created",
-          `Generating image from prompt: "${params.prompt}"`,
+          `Generating image from prompt: "${params.prompt}"${poseNote ? `\n\n${poseNote}` : ""}`,
           "text-to-image"
         );
       } catch (error) {
@@ -119,6 +122,7 @@ Example: { ai_model: "nano-banana-2", prompt: "make it red", input_task_id: "abc
         };
       }
       try {
+        checkImageAspectRatio(params.ai_model, params.aspect_ratio);
         const request: ImageToImageApiRequest = {
           ai_model: params.ai_model,
           prompt: params.prompt,

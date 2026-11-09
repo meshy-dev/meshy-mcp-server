@@ -198,7 +198,7 @@ const finished = (path) => {
   };
 };
 
-test("creative lab: keychain engraving goes on the prototype, options and format on the build", async () => {
+test("creative lab: keychain name text goes on the prototype, options and format on the build", async () => {
   const h = createHarness(registerCreativeLabTools, { "/openapi/creative-lab/": finished });
   await h.call("meshy_creative_lab", {
     product: "keychain",
@@ -228,6 +228,142 @@ test("creative lab: fidget pixel needs a subject; collapsible fidget is one task
   assert.notEqual(result.isError, true, JSON.stringify(result));
   assert.deepEqual(single.posts, [{ path: "/openapi/creative-lab/fidget-collapsible/v1", body: { image_url: "https://example.invalid/a.png", name: "ring" } }]);
   assert.equal(result.structuredContent.task_type, "creative-lab-fidget-collapsible");
+});
+
+const PHOTO = "https://example.invalid/a.png";
+const lab = () => createHarness(registerCreativeLabTools, { "/openapi/creative-lab/": finished });
+
+test("creative lab: build options are refused before the billable prototype", async () => {
+  for (const [label, input, message] of [
+    ["keychain export_resolution 63", { product: "keychain", build_options: { export_resolution: 63 } }, /export_resolution/],
+    ["keychain export_resolution 513", { product: "keychain", build_options: { export_resolution: 513 } }, /export_resolution/],
+    ["fridge-magnet export_resolution 100.5", { product: "fridge-magnet", build_options: { export_resolution: 100.5 } }, /export_resolution/],
+    ["fridge-magnet export_resolution -1", { product: "fridge-magnet", build_options: { export_resolution: -1 } }, /export_resolution/],
+    ["keychain size_mm 0", { product: "keychain", build_options: { size_mm: 0 } }, /size_mm/],
+    ["keychain relief_height_mm 21", { product: "keychain", build_options: { relief_height_mm: 21 } }, /relief_height_mm/],
+    ["keychain badge_shape oval", { product: "keychain", build_options: { badge_shape: "oval" } }, /badge_shape/],
+    ["keychain depth_threshold 1.5", { product: "keychain", build_options: { depth_threshold: 1.5 } }, /depth_threshold/],
+    ["lamp diameter_mm 49", { product: "lamp", build_options: { diameter_mm: 49 } }, /diameter_mm/],
+    ["lamp diameter_mm 401", { product: "lamp", build_options: { diameter_mm: 401 } }, /diameter_mm/],
+    ["lamp thickness_mm 0", { product: "lamp", build_options: { thickness_mm: 0 } }, /thickness_mm/],
+    ["lamp rotate_x_deg 361", { product: "lamp", build_options: { rotate_x_deg: 361 } }, /rotate_x_deg/],
+    ["lamp light_source_preset other", { product: "lamp", build_options: { light_source_preset: "other" } }, /light_source_preset/],
+    ["lamp include_result_json with the default STL", { product: "lamp", build_options: { include_result_json: true } }, /include_result_json true requires output_format zip/],
+    ["keycap head_size_mm 41 in build_options", { product: "keycap", build_options: { head_size_mm: 41 } }, /head_size_mm/],
+    ["keycap vertical_offset_mm -6 in build_options", { product: "keycap", build_options: { vertical_offset_mm: -6 } }, /vertical_offset_mm/],
+    ["keycap base_model other", { product: "keycap", build_options: { base_model: "other" } }, /base_model/],
+    ["fidget-pixel grid_size 20", { product: "fidget-pixel", pixel_subject: "other", build_options: { grid_size: 20 } }, /grid_size/],
+    ["fidget-pixel piece_size_mm 7", { product: "fidget-pixel", pixel_subject: "other", build_options: { piece_size_mm: 7 } }, /piece_size_mm/],
+    ["fidget-pixel color_count 9", { product: "fidget-pixel", pixel_subject: "other", build_options: { color_count: 9 } }, /color_count/],
+    ["fidget-pixel color_count 1.5", { product: "fidget-pixel", pixel_subject: "other", build_options: { color_count: 1.5 } }, /color_count/],
+    ["fidget-pixel piece_height_mm 9", { product: "fidget-pixel", pixel_subject: "other", build_options: { piece_height_mm: 9 } }, /piece_height_mm/],
+    ["fidget-pixel hex pieces at 10 mm", { product: "fidget-pixel", pixel_subject: "other", build_options: { shape: "hex", piece_size_mm: 10 } }, /hex pieces come in 6 or 8 mm only/],
+  ]) {
+    const h = lab();
+    const text = await h.invalid("meshy_creative_lab", { image_url: PHOTO, ...input });
+    assert.match(text, message, label);
+    assert.match(text, /build_options|include_result_json/, label);
+    assert.deepEqual(h.gets, [], label);
+  }
+});
+
+test("creative lab: build option boundary values pass and reach the build", async () => {
+  for (const export_resolution of [0, 64, 512]) {
+    const h = lab();
+    await h.call("meshy_creative_lab", { product: "keychain", image_url: PHOTO, build_options: { export_resolution } });
+    assert.deepEqual(h.posts[1].body.options, { export_resolution });
+  }
+  for (const [input, options] of [
+    [{ product: "fridge-magnet" }, { size_mm: 400, relief_height_mm: 0, depth_threshold: 1, export_resolution: 512 }],
+    [{ product: "lamp" }, { diameter_mm: 50, thickness_mm: 10, cut_amount_percent: 1, rotate_z_deg: -360, fixture_offset_x_mm: 80 }],
+    [{ product: "lamp", output_format: "zip" }, { diameter_mm: 400, include_result_json: true }],
+    [{ product: "lamp" }, { include_result_json: false }],
+    [{ product: "fidget-pixel", pixel_subject: "person" }, { shape: "hex", piece_size_mm: 8, grid_size: 32, color_count: 8, piece_height_mm: 80 }],
+    [{ product: "fidget-pixel", pixel_subject: "person" }, { shape: "square", piece_size_mm: 10, color_count: 1, piece_height_mm: 10 }],
+    [{ product: "keychain" }, { future_option: "kept" }],
+  ]) {
+    const h = lab();
+    await h.call("meshy_creative_lab", { image_url: PHOTO, build_options: options, ...input });
+    assert.deepEqual(h.posts[1].body.options, options);
+  }
+  const keycap = createHarness(registerCreativeLabTools, {
+    "/openapi/creative-lab/": (path) => ({ ...finished(path), candidate_ids: ["candidate-1"] }),
+  });
+  await keycap.call("meshy_creative_lab", {
+    product: "keycap", image_url: PHOTO, build_options: { head_size_mm: 10, vertical_offset_mm: 5 }, base_model: "cherry-mx-1x1-r1",
+  });
+  assert.deepEqual(keycap.posts[1].body.options, { head_size_mm: 10, vertical_offset_mm: 5, base_model: "cherry-mx-1x1-r1" });
+});
+
+test("creative lab: name_text is described as printed detail, not engraving", () => {
+  const { shape } = lab().schema("meshy_creative_lab");
+  assert.match(shape.name_text.description, /flat coloured detail/);
+  assert.doesNotMatch(shape.name_text.description, /engrav/i);
+  assert.doesNotMatch(shape.name.description, /engrav/i);
+  assert.match(shape.build_options.description, /export_resolution \(0 = server default, or 64–512\)/);
+});
+
+test("nano-banana models refuse 3:2 and 2:3 on both image tools; GPT Image models and other ratios pass", async () => {
+  for (const ai_model of ["nano-banana", "nano-banana-2", "nano-banana-2-lite", "nano-banana-2-1", "nano-banana-pro"]) {
+    for (const aspect_ratio of ["3:2", "2:3"]) {
+      const text = await createHarness(registerImageTools).invalid("meshy_text_to_image", { ai_model, prompt: "cat", aspect_ratio });
+      assert.match(text, new RegExp(`aspect_ratio ${aspect_ratio} is only supported by the GPT Image models`), `${ai_model} ${aspect_ratio}`);
+      assert.match(text, /gpt-image-2/);
+      await createHarness(registerImageTools).invalid("meshy_image_to_image", {
+        ai_model, prompt: "cat", aspect_ratio, reference_image_urls: [PHOTO],
+      });
+    }
+    for (const aspect_ratio of ["1:1", "16:9", "9:16", "4:3", "3:4"]) {
+      const h = createHarness(registerImageTools);
+      assert.equal((await h.call("meshy_text_to_image", { ai_model, prompt: "cat", aspect_ratio })).body.aspect_ratio, aspect_ratio);
+      assert.equal((await h.call("meshy_image_to_image", { ai_model, prompt: "cat", aspect_ratio, reference_image_urls: [PHOTO] })).body.aspect_ratio, aspect_ratio);
+    }
+  }
+  for (const ai_model of ["gpt-image-2", "gpt-image-2-5-flare", "gpt-image-2-5-sunburst"]) {
+    for (const aspect_ratio of ["3:2", "2:3"]) {
+      const h = createHarness(registerImageTools);
+      assert.equal((await h.call("meshy_text_to_image", { ai_model, prompt: "cat", aspect_ratio })).body.aspect_ratio, aspect_ratio);
+      assert.equal((await h.call("meshy_image_to_image", { ai_model, prompt: "cat", aspect_ratio, reference_image_urls: [PHOTO] })).body.aspect_ratio, aspect_ratio);
+    }
+  }
+});
+
+test("a pose on a nano-banana model says the aspect ratio is not used; the request still goes out", async () => {
+  const run = async (input) => {
+    const h = createHarness(registerImageTools);
+    const result = await h.run("meshy_text_to_image", { prompt: "knight", ...input });
+    assert.notEqual(result.isError, true, JSON.stringify(result));
+    return { result, body: h.posts[0].body, text: result.content[0].text, message: result.structuredContent.message };
+  };
+
+  // The 1:1 default (no aspect_ratio): the note says the image will not be 1:1.
+  const dflt = await run({ ai_model: "nano-banana-2", pose_mode: "t-pose" });
+  assert.match(dflt.message, /Note: nano-banana-2 renders a t-pose image at 3:4, so the image will not be 1:1; the GPT Image models keep the ratio\./);
+  assert.match(dflt.text, /Note: nano-banana-2 renders a t-pose image at 3:4/);
+  assert.equal("aspect_ratio" in dflt.body, false);
+  assert.equal(dflt.body.pose_mode, "t-pose");
+
+  // An explicit ratio is named, and still sent.
+  const wide = await run({ ai_model: "nano-banana-pro", pose_mode: "a-pose", aspect_ratio: "16:9" });
+  assert.match(wide.message, /nano-banana-pro renders a a-pose image at 3:4, so aspect_ratio 16:9 is not used/);
+  assert.equal(wide.body.aspect_ratio, "16:9");
+
+  // The JSON format carries it in the message too.
+  const json = await run({ ai_model: "nano-banana", pose_mode: "t-pose", aspect_ratio: "1:1", response_format: "json" });
+  assert.match(JSON.parse(json.text).message, /aspect_ratio 1:1 is not used/);
+
+  // No note: 3:4 asked, a GPT Image model, or no pose.
+  for (const input of [
+    { ai_model: "nano-banana-2", pose_mode: "t-pose", aspect_ratio: "3:4" },
+    { ai_model: "gpt-image-2", pose_mode: "t-pose" },
+    { ai_model: "gpt-image-2-5-sunburst", pose_mode: "a-pose", aspect_ratio: "16:9" },
+    { ai_model: "nano-banana-2", aspect_ratio: "16:9" },
+    { ai_model: "nano-banana-2" },
+  ]) {
+    const quiet = await run(input);
+    assert.doesNotMatch(quiet.text, /Note:/, JSON.stringify(input));
+    assert.doesNotMatch(quiet.message, /Note:/, JSON.stringify(input));
+  }
 });
 
 test("cancel deletes a finished task only after confirmation and explains refunds", async () => {

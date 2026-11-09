@@ -44,7 +44,7 @@ PREFER THE IMAGE ROUTE: for higher quality and more control, generate a design i
 PICK THE MODEL FROM THE PROJECT: ask what the model is for if the user hasn't said. A game asset, a character to rig, or a face-count budget: model_type "smart-topology" with meshy-t2.5 (or meshy-t2 for speed) and target_polycount, not meshy-7.1 with should_remesh. More: ${MODELS_DOC_URL}
 
 Examples:
-  - Low-poly: { prompt: "dragon", model_type: "smart-topology", ai_model: "meshy-t2", target_polycount: 4000 }
+  - Low-poly: { prompt: "dragon", model_type: "smart-topology", ai_model: "meshy-t2.5", target_polycount: 4000 }
   - Max detail: { prompt: "ornate knight helmet", ai_model: "meshy-7.1", geometry_resolution: "4k" }
   - 3D print: { prompt: "cat", target_formats: ["obj"] }`,
       inputSchema: TextTo3DInputSchema,

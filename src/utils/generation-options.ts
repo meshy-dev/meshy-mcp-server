@@ -18,7 +18,7 @@ export function resolveGenerationOptions(options: GenerationOptions, endpoint: G
   const isSmartModel = isSmartTopologyModel(options.ai_model);
   const modelType = options.model_type ?? (isSmartModel ? ModelType.SMART_TOPOLOGY : ModelType.STANDARD);
   const model = options.ai_model ?? (modelType === ModelType.SMART_TOPOLOGY
-    ? SmartTopologyModel.MESHY_T2 : AIModel.LATEST);
+    ? SmartTopologyModel.MESHY_T2_5 : AIModel.LATEST);
   const smartTopology = modelType === ModelType.SMART_TOPOLOGY;
 
   if (smartTopology && !isSmartTopologyModel(model)) {
@@ -34,8 +34,11 @@ export function resolveGenerationOptions(options: GenerationOptions, endpoint: G
   if (maxFaces !== undefined && options.target_polycount !== undefined && options.target_polycount > maxFaces) {
     throw new RequestValidationError(`${model} target_polycount must be between 100 and ${maxFaces.toLocaleString("en-US")} faces.`);
   }
-  if (smartTopology && endpoint === "text" && options.topology === "quad") {
-    throw new RequestValidationError("Smart Topology text preview accepts triangle topology only.");
+  // Smart Topology outputs triangles only (multi-image never reaches here: refused above).
+  if (smartTopology && options.topology === "quad") {
+    throw new RequestValidationError(
+      "Smart Topology accepts triangle topology only; for quads, run meshy_remesh with topology quad on the finished model."
+    );
   }
   if (options.ultra_mode && options.geometry_resolution !== undefined && options.geometry_resolution !== "2k") {
     throw new RequestValidationError("ultra_mode true conflicts with geometry_resolution; use 2k or omit the deprecated flag.");

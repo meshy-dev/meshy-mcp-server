@@ -124,7 +124,7 @@ export const TextTo3DInputSchema = z.object({
     AIModel.MESHY_7, SmartTopologyModel.MESHY_T2, SmartTopologyModel.MESHY_T2_5
   ])
     .optional()
-    .describe(`${STANDARD_MODELS}. With model_type smart-topology: 'meshy-t2' (the default there) or 'meshy-t2.5' (newest, sharper detail for game assets).`),
+    .describe(`${STANDARD_MODELS}. With model_type smart-topology: 'meshy-t2.5' (the default there; newest, sharper detail for game assets) or 'meshy-t2'.`),
   model_type: modelType(),
   geometry_resolution: geometryResolution(),
   ultra_mode: deprecatedUltraMode(),
@@ -156,7 +156,7 @@ export const ImageTo3DInputSchema = z.object({
     .describe("A SUCCEEDED text-to-image / image-to-image task with exactly one image, used as the input."),
   ai_model: z.union([z.enum(STANDARD_AI_MODELS), z.nativeEnum(SmartTopologyModel)])
     .optional()
-    .describe(`${STANDARD_MODELS}. With model_type smart-topology: 'meshy-t2' (the default there) or 'meshy-t2.5' (newest, sharper detail for game assets).`),
+    .describe(`${STANDARD_MODELS}. With model_type smart-topology: 'meshy-t2.5' (the default there; newest, sharper detail for game assets) or 'meshy-t2'.`),
   geometry_resolution: geometryResolution(),
   ultra_mode: deprecatedUltraMode(),
   model_type: modelType(),
