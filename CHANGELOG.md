@@ -2,6 +2,43 @@
 
 ## [Unreleased]
 
+## [0.6.10] - 2026-11-09
+
+### Added
+
+- `meshy_text_to_image` says so when a pose does not get the aspect ratio asked for. The API renders
+  an `a-pose` / `t-pose` image on a nano-banana model at 3:4 whatever `aspect_ratio` is (the GPT
+  Image models keep it), and it does so for the 1:1 default too. The request is sent as before; the
+  result message now carries a short note when `pose_mode` is set on a nano-banana model and
+  `aspect_ratio` is not `3:4`. The `pose_mode` and `aspect_ratio` descriptions say the same.
+
+### Changed
+
+- Smart Topology without `ai_model` now runs `meshy-t2.5` (was `meshy-t2`), on `meshy_text_to_3d`
+  and `meshy_image_to_3d`, so a game asset gets the newer model's sharper detail unless the caller
+  names `ai_model: "meshy-t2"`. Without `target_polycount` the API's own default for the model
+  applies: 15,000 faces on `meshy-t2.5` (4,000 on `meshy-t2`). The tool descriptions and server
+  instructions name `meshy-t2.5` as the default.
+- `meshy_creative_lab`: keychain `name_text` is described as what it is, a flat coloured detail
+  printed on the face (not raised or cut), not engraving. The build keeps it; `name` only labels
+  the task.
+- Published to npm through trusted publishing (GitHub OIDC), with provenance; no npm token is
+  stored.
+
+### Fixed
+
+- `meshy_creative_lab` checks `build_options` against the product's ranges before the prototype is
+  posted, so a bad value no longer comes back after the prototype has been charged.
+  `export_resolution` is 0 (the server default) or a whole number from 64 to 512; the lamp,
+  keychain / fridge-magnet, keycap and fidget-pixel options are held to their documented ranges,
+  hex fidget pieces must be 6 or 8 mm, and lamp `include_result_json: true` needs
+  `output_format: "zip"`. Options the server adds later still pass through.
+- `meshy_image_to_3d` with Smart Topology and `topology: "quad"` is refused, as `meshy_text_to_3d`
+  already did, instead of quietly dropping `quad` and returning triangles. Use `meshy_remesh` for
+  quads.
+- `meshy_text_to_image` / `meshy_image_to_image` refuse a nano-banana `ai_model` with
+  `aspect_ratio` `3:2` or `2:3` before any request (only the GPT Image models take those two).
+
 ## [0.6.9] - 2026-11-05
 
 ### Changed

@@ -10,9 +10,9 @@ const removeBackground = () => z.boolean()
   .optional()
   .describe("Transparent-background PNG (no effect on multi-view output).");
 
-const aspectRatio = () => z.nativeEnum(AspectRatio)
+const aspectRatio = (note = "") => z.nativeEnum(AspectRatio)
   .optional()
-  .describe("Default '1:1'; '3:2' and '2:3' are GPT Image models only. Not with generate_multi_view.");
+  .describe(`Default '1:1'; '3:2' and '2:3' are GPT Image models only (refused on nano-banana). Not with generate_multi_view.${note}`);
 
 /**
  * Text-to-image input schema
@@ -26,8 +26,8 @@ export const TextToImageInputSchema = z.object({
     .describe("Front/side/back views (input for meshy_multi_image_to_3d). Not with aspect_ratio."),
   pose_mode: z.nativeEnum(PoseMode)
     .optional()
-    .describe("Character pose: 'a-pose' or 't-pose'"),
-  aspect_ratio: aspectRatio(),
+    .describe("Character pose: 'a-pose' or 't-pose'. nano-banana models render a pose at 3:4 whatever aspect_ratio says."),
+  aspect_ratio: aspectRatio(" With pose_mode, nano-banana models render 3:4 regardless."),
   remove_background: removeBackground(),
   response_format: ResponseFormatSchema
 }).strict();

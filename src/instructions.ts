@@ -128,7 +128,7 @@ Suggested flow:
 ## Scenario K: Cleaner Topology / Part-Separated Geometry (cheaply)
 Trigger: user wants an editable, part-separated, or lower-poly model from an image or text.
 Suggested flow:
-1. Confirm the model (meshy-t2, or meshy-t2.5: newest, sharper detail for game assets), cost, face target, and whether textures are wanted.
+1. Confirm the model (meshy-t2.5, the default: newest, sharper detail for game assets; or meshy-t2), cost, face target, and whether textures are wanted.
 2. Call meshy_image_to_3d or meshy_text_to_3d with model_type:"smart-topology", that ai_model, and target_polycount. Set should_texture false on the image route when only geometry is approved.
 3. Text preview is untextured; confirm refine separately, without a refine ai_model override.
 

@@ -185,7 +185,7 @@ export interface CreativeLabPrototypeApiRequest {
   name?: string;
   image_subject?: string; // lamp
   type?: string;          // fidget-pixel: person | other
-  name_text?: string;     // keychain engraving
+  name_text?: string;     // keychain: printed on the face as a flat coloured detail, not engraved
 }
 
 export interface CreativeLabBuildApiRequest {
