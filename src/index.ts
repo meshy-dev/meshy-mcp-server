@@ -31,6 +31,7 @@ import { registerImageTools } from "./tools/image.js";
 import { registerPrintingTools } from "./tools/printing.js";
 import { registerCreativeLabTools } from "./tools/creative-lab.js";
 import { registerBalanceTool } from "./tools/balance.js";
+import { registerViewerTools } from "./tools/viewer.js";
 import { MESHY_INSTRUCTIONS } from "./instructions.js";
 import { VERSION } from "./version.js";
 
@@ -80,7 +81,10 @@ async function initializeServer(clientInfo?: () => HostInfo | undefined) {
     registerBalanceTool(server, meshyClient);
     console.error("  ✓ Account tools registered (check-balance, list-usage)");
 
-    console.error("✓ Server initialized successfully with 28 tools");
+    registerViewerTools(server, meshyClient);
+    console.error("  ✓ 3D viewer registered (view-model, an MCP App)");
+
+    console.error("✓ Server initialized successfully with 29 tools");
     return meshyClient;
   } catch (error) {
     console.error("Failed to initialize server:", error);
@@ -127,7 +131,9 @@ async function runStdio() {
   // One client per process, so its handshake clientInfo names the host.
   await initializeServer(() => server.server.getClientVersion());
 
-  const transport = new StdioServerTransport();
+  // SDK 1.32 closes the stdio connection on any incoming message over 10 MB,
+  // which would cut off a model_url `data:` URI (documented up to 100 MB).
+  const transport = new StdioServerTransport(process.stdin, process.stdout, { maxBufferSize: 128 * 1024 * 1024 });
   await server.connect(stripSchemaDialect(transport));
 
   console.error("✓ Meshy MCP Server running via stdio");

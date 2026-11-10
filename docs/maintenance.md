@@ -12,7 +12,7 @@ npm run lint
 npm test
 ```
 
-`npm test` builds the server before running Node's offline tests. Configure the client with an absolute Node executable if its environment does not provide Node on PATH, and an absolute path to the built entry point:
+`npm test` builds the server before running Node's offline tests. The build also bundles the 3D viewer that `meshy_view_model` shows (`viewer/` → `dist/viewer/model-viewer.html`); with `tsc` alone, the viewer page fails to load with a message asking for `npm run build`. The viewer only renders in a host that displays MCP Apps, so check it there: call `meshy_view_model` with `file_path` set to a local `.glb`, which needs no API key. Configure the client with an absolute Node executable if its environment does not provide Node on PATH, and an absolute path to the built entry point:
 
 ```json
 {

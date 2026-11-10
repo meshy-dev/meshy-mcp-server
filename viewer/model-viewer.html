@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Meshy 3D viewer</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --fg: #1f1f1f; --muted: #6b6b6b; --line: #e2e2e2; --stage: #f4f4f5; --bar: #2563eb;
+    --button: #ffffff; --button-hover: #f0f0f0;
+  }
+  :root[data-theme="dark"] {
+    --fg: #e8e8e8; --muted: #9b9b9b; --line: #303030; --stage: #1c1c1e; --bar: #60a5fa;
+    --button: #26262a; --button-hover: #313136;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: transparent; color: var(--fg); font: 12px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  #stage { position: relative; height: 420px; background: var(--stage); touch-action: none; overflow: hidden; }
+  #stage canvas { display: block; width: 100%; height: 100%; outline: none; }
+  #overlay { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 24px; text-align: center; color: var(--muted); }
+  #overlay[hidden] { display: none; }
+  #progress { width: min(240px, 70%); height: 4px; border-radius: 2px; background: var(--line); overflow: hidden; }
+  #progress > div { height: 100%; width: 0; background: var(--bar); transition: width 120ms linear; }
+  #tools { position: absolute; top: 8px; right: 8px; display: flex; gap: 6px; }
+  #tools[hidden] { display: none; }
+  #tools button { font: inherit; color: var(--fg); background: var(--button); border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; cursor: pointer; }
+  #tools button:hover { background: var(--button-hover); }
+  #tools button[aria-pressed="true"] { border-color: var(--bar); }
+  footer { display: flex; justify-content: space-between; gap: 12px; padding: 6px 2px 0; color: var(--muted); }
+  #name { color: var(--fg); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #stats { white-space: nowrap; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="overlay"><span id="message">Waiting for the model…</span><div id="progress" hidden><div></div></div></div>
+  <div id="tools" hidden>
+    <button id="rotate" type="button" aria-pressed="true" title="Turn the model slowly">Auto-rotate</button>
+    <button id="reset" type="button" title="Back to the starting view">Reset view</button>
+  </div>
+</div>
+<footer><span id="name"></span><span id="stats"></span></footer>
+<!-- viewer script -->
+</body>
+</html>

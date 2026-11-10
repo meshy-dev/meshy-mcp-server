@@ -18,7 +18,7 @@
   "scripts": {
     "start": "node dist/index.js",
     "dev": "tsx watch src/index.ts",
-    "build": "tsc",
+    "build": "tsc && node scripts/build-viewer.mjs",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
     "test": "npm run build && node --test tests/*.test.mjs",
@@ -41,15 +41,17 @@
   },
   "license": "MIT",
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.6.1",
+    "@modelcontextprotocol/sdk": "^1.32.2",
     "axios": "^1.7.9",
     "dotenv": "^17.3.1",
     "express": "^4.18.2",
-    "zod": "^3.23.8"
+    "zod": "^3.25.0"
   },
   "devDependencies": {
     "@types/express": "^4.17.21",
     "@types/node": "^22.10.0",
+    "esbuild": "^0.27.4",
+    "three": "0.187.0",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2"
   },

@@ -2,6 +2,30 @@
 
 ## [Unreleased]
 
+### Added
+
+- `meshy_view_model`: shows a finished model in an interactive 3D viewer inside the conversation,
+  in hosts that display MCP Apps (Cursor, Claude, VS Code and others). Pass `task_id` (the server
+  fetches the task's GLB: the model, a rigged character or an animation) or `file_path` for a
+  local `.glb`, for example one `meshy_download_model` saved; `file_path` works only on the local
+  (stdio) server. The viewer rotates, zooms, shows textures and plays the first animation. It is
+  free and saves nothing. The server keeps up to 4 models (256 MB in all, for an hour) in memory and
+  hands each one to the viewer in 2 MB chunks (`meshy-model://{id}/{chunk}`), because Meshy's asset
+  host does not allow reads from an app frame and some MCP clients drop the connection on one large
+  message. Opening the same task or unchanged file again reuses the copy in memory. When the client
+  does not report MCP Apps support, the tool loads nothing and says so.
+
+### Changed
+
+- Requires `@modelcontextprotocol/sdk` 1.32.2 or later (was `^1.6.1`, with 1.27.1 in the
+  lockfile) and `zod` 3.25 or later: older SDKs drop the capability a client uses to say it
+  displays MCP Apps.
+- The stdio transport accepts incoming messages up to 128 MB. SDK 1.32 closes the connection on
+  any message over 10 MB by default, which would cut off a `model_url` `data:` URI (documented up
+  to 100 MB).
+- `npm run build` also builds the viewer page, `dist/viewer/model-viewer.html`, with esbuild and
+  three.js (development dependencies only).
+
 ## [0.6.11] - 2026-11-10
 
 ### Fixed

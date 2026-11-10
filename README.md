@@ -4,7 +4,7 @@
 
 ## Features
 
-28 tools covering the full Meshy API:
+29 tools covering the full Meshy API and an interactive 3D viewer:
 
 | Category | Tools |
 |----------|-------|
@@ -16,11 +16,13 @@
 | **Image Generation** | `meshy_text_to_image`, `meshy_image_to_image` |
 | **Task Management** | `meshy_get_task_status`, `meshy_list_tasks`, `meshy_cancel_task`, `meshy_download_model` |
 | **Workspace** | `meshy_list_models` |
+| **3D Viewer** | `meshy_view_model` (an MCP App) |
 | **3D Printing** | `meshy_send_to_slicer`, `meshy_analyze_printability`, `meshy_repair_printability`, `meshy_process_multicolor`, `meshy_auto_split` |
 | **Account** | `meshy_check_balance`, `meshy_list_usage` |
 
 ### Key Capabilities
 
+- **3D viewer in the conversation**: `meshy_view_model` shows a finished model (by `task_id`, or a local `.glb` by `file_path`) in an interactive viewer the user can rotate and zoom, with textures and animation. It is an [MCP App](https://modelcontextprotocol.io/extensions/apps/overview), so it appears in hosts that display MCP Apps, such as Cursor, Claude and VS Code. Free; it saves nothing. The server reads the GLB and hands it to the viewer itself, so the viewer needs no network access
 - **Safe retries (v0.6.3)**: a create request is never resent after a timeout or server error, so a task is never created and billed twice; status checks retry at the API's suggested interval
 - **Text to 3D**: Generate 3D models from text descriptions (preview + refine pipeline)
 - **Image to 3D**: Convert single or multiple images into 3D models

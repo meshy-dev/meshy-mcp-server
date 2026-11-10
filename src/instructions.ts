@@ -145,4 +145,7 @@ Suggested flow:
 1. Ask user about intended use to determine format
 2. From text, offer the image route (meshy_text_to_image → user approves the image → meshy_image_to_3d with input_task_id; textured in one task), or a quick meshy_text_to_3d preview (+ meshy_text_to_3d_refine for textures)
 3. Download in chosen format
+
+## Showing a Model in 3D
+To let the user see a finished model in the conversation, call meshy_view_model (free) with its task_id, or file_path for a downloaded .glb. It shows an interactive viewer only in hosts that display MCP Apps.
 `;
