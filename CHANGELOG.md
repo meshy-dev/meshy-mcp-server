@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.6.11] - 2026-11-10
+
 ### Fixed
 
 - `meshy_image_to_3d`, `meshy_multi_image_to_3d` and `meshy_text_to_3d_refine` refuse
