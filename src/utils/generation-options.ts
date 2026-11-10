@@ -230,6 +230,18 @@ export function resolveTextureModel(
   return textureModel;
 }
 
+/** The API uses one texture input and drops the other, so refuse both. */
+export function checkSingleTextureInput(params: {
+  texture_prompt?: string;
+  texture_image_url?: string;
+}) {
+  if (params.texture_prompt && params.texture_image_url) {
+    throw new RequestValidationError(
+      "texture_prompt and texture_image_url are mutually exclusive. Send only one: texture_image_url to texture from a reference image, or texture_prompt to describe the texture."
+    );
+  }
+}
+
 /** Multi-view texture (texture_image_urls) on multi-image-to-3d. */
 export function checkMultiViewTexture(model: string, params: {
   texture_image_urls?: string[];

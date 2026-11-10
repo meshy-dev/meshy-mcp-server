@@ -767,3 +767,22 @@ test("agents ask the use case and steer game assets to smart topology, text rout
   assert.match(text, /model_type "smart-topology" with meshy-t2\.5/);
   assert.ok(text.includes(`More: ${MODELS_DOC_URL}`));
 });
+
+test("texture_prompt and texture_image_url are refused together and sent alone", async () => {
+  const prompt = { texture_prompt: "rusty metal" };
+  const image = { texture_image_url: "https://example.invalid/style.png" };
+  const tools = [
+    ["meshy_image_to_3d", { input_task_id: "offline-image" }],
+    ["meshy_multi_image_to_3d", { image_urls: ["https://example.invalid/input.png"] }],
+    ["meshy_text_to_3d_refine", { preview_task_id: "offline-preview" }],
+  ];
+  for (const [name, base] of tools) {
+    await createHarness().invalid(name, { ...base, ...prompt, ...image });
+    const { body: withPrompt } = await createHarness().call(name, { ...base, ...prompt });
+    assert.equal(withPrompt.texture_prompt, prompt.texture_prompt, name);
+    assert.equal("texture_image_url" in withPrompt, false, name);
+    const { body: withImage } = await createHarness().call(name, { ...base, ...image });
+    assert.equal(withImage.texture_image_url, image.texture_image_url, name);
+    assert.equal("texture_prompt" in withImage, false, name);
+  }
+});

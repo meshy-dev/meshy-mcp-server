@@ -60,9 +60,9 @@ const generationTexturePrompt = (note = "") =>
   z.string()
     .max(800, "Texture prompt must not exceed 800 characters")
     .optional()
-    .describe(`Text to guide texturing (max 800 characters).${note}`);
+    .describe(`Text to guide texturing (max 800 characters). Not with texture_image_url.${note}`);
 const textureImageUrl = (note = "") =>
-  UrlSchema.optional().describe(`Image URL to guide texturing.${note}`);
+  UrlSchema.optional().describe(`Image URL to guide texturing. Not with texture_prompt.${note}`);
 const deprecatedSymmetryMode = () =>
   z.nativeEnum(SymmetryMode).optional()
     .describe("Deprecated: has no effect.");
