@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- `meshy_image_to_3d`, `meshy_multi_image_to_3d` and `meshy_text_to_3d_refine` refuse
+  `texture_prompt` together with `texture_image_url`, as `meshy_retexture` already does for its
+  style inputs. The API textures from only one of the two and drops the other without a word (on
+  these endpoints it keeps `texture_prompt`), and API v2 returns 400 for the pair. The error names
+  both fields and says which to send; each field's description says "Not with" the other.
+
 ## [0.6.10] - 2026-11-09
 
 ### Added

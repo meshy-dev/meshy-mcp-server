@@ -13,6 +13,7 @@ import { ResponseFormat } from "../constants.js";
 import { formatTaskCreatedResponse } from "../utils/response-formatter.js";
 import {
   checkMultiViewTexture,
+  checkSingleTextureInput,
   checkTextureResolution,
   resolveGenerationOptions,
   resolveTextureModel,
@@ -156,6 +157,7 @@ Example (game character): { file_path: "/path/to/character.png", ai_model: "mesh
     async (params: z.infer<typeof ImageTo3DInputSchema>) => {
       try {
         const options = resolveGenerationOptions(params, "image");
+        checkSingleTextureInput(params);
         const textureModel = resolveTextureModel(options.ai_model, options.smartTopology, params);
         const request: ImageTo3DApiRequest = {
           enable_pbr: params.enable_pbr,
@@ -287,6 +289,7 @@ Example: { preview_task_id: "abc-123", texture_prompt: "rusty metal", enable_pbr
     },
     async (params: z.infer<typeof TextTo3DRefineInputSchema>) => {
       try {
+        checkSingleTextureInput(params);
         const request: TextTo3DRefineApiRequest = {
           mode: "refine",
           preview_task_id: params.preview_task_id,
@@ -381,6 +384,7 @@ Example (real object from photos): { file_paths: ["/path/front.jpg", "/path/side
       try {
         const options = resolveGenerationOptions(params, "multi-image");
         checkMultiViewTexture(options.ai_model, params);
+        checkSingleTextureInput(params);
         const textureModel = resolveTextureModel(options.ai_model, false, params);
         const request: MultiImageTo3DApiRequest = {
           enable_pbr: params.enable_pbr,
