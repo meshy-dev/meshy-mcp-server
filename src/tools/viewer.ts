@@ -19,7 +19,7 @@ import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mc
 import { MeshyClient, getTaskWithAutoInference } from "../services/meshy-client.js";
 import { handleMeshyError } from "../services/error-handler.js";
 import { RequestValidationError } from "../utils/generation-options.js";
-import { ViewModelInputSchema } from "../schemas/viewer.js";
+import { ViewLocalModelInputSchema, ViewModelInputSchema } from "../schemas/viewer.js";
 import { TaskStatus, TaskType } from "../constants.js";
 import { Task } from "../types.js";
 
@@ -140,7 +140,7 @@ async function openTaskModel(client: MeshyClient, taskId: string, taskTypeHint?:
   return { id: randomUUID(), key, name, bytes, source: { task_id: taskId, task_type: taskType }, usedAt: Date.now() };
 }
 
-function openFileModel(filePath: string): KeptModel {
+function openFileModel(filePath: string, canUseTaskId: boolean): KeptModel {
   if (!path.isAbsolute(filePath)) throw new RequestValidationError(`file_path must be absolute: ${filePath}`);
   let fd: number;
   try {
@@ -151,7 +151,7 @@ function openFileModel(filePath: string): KeptModel {
     if (code === "EISDIR") throw new RequestValidationError(`Not a file: ${filePath}`);
     // macOS answers EPERM when the client lacks access to a protected folder (Documents, Desktop, Downloads).
     throw new RequestValidationError(
-      `Cannot read ${filePath} (${code ?? "error"}). If it is in a protected folder such as Documents, the app running this server needs access to it, or show the model by task_id.`
+      `Cannot read ${filePath} (${code ?? "error"}). If it is in a protected folder such as Documents, the app running this server needs access to it${canUseTaskId ? ", or show the model by task_id" : ""}.`
     );
   }
   try {
@@ -207,28 +207,36 @@ function clientShowsApps(server: McpServer): boolean | undefined {
 }
 
 /**
- * Register the 3D viewer tool and the resources its page reads
+ * Register the 3D viewer tool and the resources its page reads.
+ *
+ * Without `client` the tool is local only (MESHY_TOOLS=viewer): it takes
+ * file_path alone, never calls the Meshy API, and names no other Meshy tool.
  */
-export function registerViewerTools(server: McpServer, client: MeshyClient) {
+export function registerViewerTools(server: McpServer, client?: MeshyClient) {
   server.registerTool(
     "meshy_view_model",
     {
       title: "View Model in 3D",
-      description: `Show a finished model in an interactive 3D viewer in the conversation, where the user can rotate and zoom it. Works in hosts that display MCP Apps; free, saves nothing.
+      description: client
+        ? `Show a finished model in an interactive 3D viewer in the conversation, where the user can rotate and zoom it. Works in hosts that display MCP Apps; free, saves nothing.
 
-Pass task_id (the server fetches the task's GLB: the model, a rigged character or an animation) or file_path (a local .glb, e.g. from meshy_download_model). GLB only.`,
-      inputSchema: ViewModelInputSchema,
+Pass task_id (the server fetches the task's GLB: the model, a rigged character or an animation) or file_path (a local .glb, e.g. from meshy_download_model). GLB only.`
+        : `Show a local .glb model in an interactive 3D viewer in the conversation, where the user can rotate and zoom it. Works in hosts that display MCP Apps; free, saves nothing.
+
+Pass file_path, the absolute path of the .glb file. GLB only.`,
+      // One handler serves both schemas: what the local one parses is a subset of the full one.
+      inputSchema: (client ? ViewModelInputSchema : ViewLocalModelInputSchema) as typeof ViewModelInputSchema,
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,
         idempotentHint: true,
-        openWorldHint: true
+        openWorldHint: Boolean(client)
       },
       _meta: { ui: { resourceUri: VIEWER_URI }, "ui/resourceUri": VIEWER_URI }
     },
     async (params: z.infer<typeof ViewModelInputSchema>) => {
       try {
-        if (Boolean(params.task_id) === Boolean(params.file_path)) {
+        if (client && Boolean(params.task_id) === Boolean(params.file_path)) {
           throw new RequestValidationError("Pass exactly one of task_id or file_path.");
         }
         if (params.file_path && process.env.TRANSPORT === "http") {
@@ -238,7 +246,7 @@ Pass task_id (the server fetches the task's GLB: the model, a rigged character o
           return {
             content: [{
               type: "text",
-              text: "This client did not report support for MCP Apps, so it cannot show the 3D viewer; nothing was loaded. Save the model with meshy_download_model and open it in a 3D app instead."
+              text: `This client did not report support for MCP Apps, so it cannot show the 3D viewer; nothing was loaded. ${client ? "Save the model with meshy_download_model and open it" : "Open the file"} in a 3D app instead.`
             }]
           };
         }
@@ -249,9 +257,9 @@ Pass task_id (the server fetches the task's GLB: the model, a rigged character o
         loading++;
         let model: KeptModel;
         try {
-          model = params.task_id
+          model = client && params.task_id
             ? await openTaskModel(client, params.task_id, params.task_type)
-            : openFileModel(params.file_path!);
+            : openFileModel(params.file_path!, Boolean(client));
         } finally {
           loading--;
         }

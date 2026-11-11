@@ -180,6 +180,25 @@ Most clients auto-load the new server, but **Cursor and VS Code require a manual
 | `PORT` | Port for HTTP transport | `3000` |
 | `CHARACTER_LIMIT` | Max response size in characters | `25000` |
 | `MESHY_CLIENT` | Optional. Identifies the integrating app in Meshy's logs, format `name/version` (e.g. `hermes-meshy-plugin/0.4.0`) | — |
+| `MESHY_TOOLS` | Optional. `viewer` registers only `meshy_view_model` (see [Viewer only](#viewer-only)); any value other than `all` or `viewer` stops the server | `all` |
+
+### Viewer only
+
+An integration that creates and downloads models another way (the [Meshy CLI](https://github.com/meshy-dev/meshy-cli), for example) can add just the 3D viewer:
+
+```json
+{
+  "mcpServers": {
+    "meshy-viewer": {
+      "command": "npx",
+      "args": ["-y", "@meshy-ai/meshy-mcp-server"],
+      "env": { "MESHY_TOOLS": "viewer" }
+    }
+  }
+}
+```
+
+With `MESHY_TOOLS=viewer` the server registers `meshy_view_model` and nothing else. The tool takes `file_path` (an absolute path to a local `.glb`) only, the server never calls the Meshy API, and no `MESHY_API_KEY` is needed. This mode runs over stdio only.
 
 ## Development
 

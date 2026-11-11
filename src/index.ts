@@ -32,13 +32,29 @@ import { registerPrintingTools } from "./tools/printing.js";
 import { registerCreativeLabTools } from "./tools/creative-lab.js";
 import { registerBalanceTool } from "./tools/balance.js";
 import { registerViewerTools } from "./tools/viewer.js";
-import { MESHY_INSTRUCTIONS } from "./instructions.js";
+import { MESHY_INSTRUCTIONS, VIEWER_ONLY_INSTRUCTIONS } from "./instructions.js";
 import { VERSION } from "./version.js";
+
+/**
+ * Which tools to register, from MESHY_TOOLS: every tool (unset or "all"), or
+ * "viewer" for the 3D viewer alone, for an integration that creates and
+ * downloads models another way and only needs to show them. Any other value
+ * stops the server: falling back to every tool would hand that integration
+ * the paid tools it meant to leave out.
+ */
+function readToolSet(): "all" | "viewer" {
+  const value = process.env.MESHY_TOOLS?.trim().toLowerCase() || "all";
+  if (value === "all" || value === "viewer") return value;
+  console.error(`MESHY_TOOLS must be "all" or "viewer", not "${process.env.MESHY_TOOLS}".`);
+  process.exit(1);
+}
+
+const TOOL_SET = readToolSet();
 
 // Create MCP server instance
 const server = new McpServer(
   { name: "@meshy-ai/meshy-mcp-server", version: VERSION },
-  { instructions: MESHY_INSTRUCTIONS }
+  { instructions: TOOL_SET === "viewer" ? VIEWER_ONLY_INSTRUCTIONS : MESHY_INSTRUCTIONS }
 );
 
 /**
@@ -47,6 +63,14 @@ const server = new McpServer(
  */
 async function initializeServer(clientInfo?: () => HostInfo | undefined) {
   try {
+    if (TOOL_SET === "viewer") {
+      // No Meshy client: the viewer shows local files and never calls the API,
+      // so this mode needs no API key.
+      registerViewerTools(server);
+      console.error("✓ Server initialized with the 3D viewer only (MESHY_TOOLS=viewer)");
+      return;
+    }
+
     // Create Meshy API client (the key is checked on the first tool call)
     const meshyClient = createMeshyClient(clientInfo);
     console.error("✓ Meshy client initialized");
@@ -85,7 +109,6 @@ async function initializeServer(clientInfo?: () => HostInfo | undefined) {
     console.error("  ✓ 3D viewer registered (view-model, an MCP App)");
 
     console.error("✓ Server initialized successfully with 29 tools");
-    return meshyClient;
   } catch (error) {
     console.error("Failed to initialize server:", error);
     throw error;
@@ -189,6 +212,11 @@ async function runHTTP() {
  */
 async function main() {
   const transport = process.env.TRANSPORT || "stdio";
+
+  if (TOOL_SET === "viewer" && transport === "http") {
+    console.error("MESHY_TOOLS=viewer needs the stdio transport: it shows local files, which the HTTP server does not read.");
+    process.exit(1);
+  }
 
   try {
     if (transport === "http") {

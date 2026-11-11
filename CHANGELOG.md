@@ -14,6 +14,11 @@
   host does not allow reads from an app frame and some MCP clients drop the connection on one large
   message. Opening the same task or unchanged file again reuses the copy in memory. When the client
   does not report MCP Apps support, the tool loads nothing and says so.
+- `MESHY_TOOLS=viewer` starts the server with `meshy_view_model` alone, for an integration that
+  creates and downloads models another way and only needs to show them. In this mode the tool takes
+  `file_path` only, the server never calls the Meshy API and needs no `MESHY_API_KEY`, and it runs
+  over stdio only. The default, `all`, registers every tool as before; any other value stops the
+  server with an error instead of registering every tool.
 
 ### Changed
 

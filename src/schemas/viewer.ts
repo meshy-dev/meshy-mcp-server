@@ -13,3 +13,9 @@ export const ViewModelInputSchema = z.object({
     .optional()
     .describe("Instead of task_id: absolute path to a local .glb file, e.g. one meshy_download_model saved. Local (stdio) server only.")
 }).strict();
+
+/** The viewer alone (MESHY_TOOLS=viewer): local files only, no task lookups. */
+export const ViewLocalModelInputSchema = z.object({
+  file_path: z.string()
+    .describe("Absolute path to the local .glb file to show.")
+}).strict();

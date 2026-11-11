@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { after, test } from "node:test";
+import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import http from "node:http";
 import os from "node:os";
@@ -50,7 +51,8 @@ function tempFile(name, bytes) {
   return file;
 }
 
-async function connect({ tasks = {}, capabilities = UI_CAPABILITY } = {}) {
+/** `viewerOnly` registers the tool without a Meshy client, as MESHY_TOOLS=viewer does. */
+async function connect({ tasks = {}, capabilities = UI_CAPABILITY, viewerOnly = false } = {}) {
   const server = new McpServer({ name: "test", version: "0" });
   const meshy = {
     async get(apiPath) {
@@ -61,7 +63,7 @@ async function connect({ tasks = {}, capabilities = UI_CAPABILITY } = {}) {
       throw error;
     },
   };
-  registerViewerTools(server, meshy);
+  registerViewerTools(server, viewerOnly ? undefined : meshy);
   const [serverSide, clientSide] = InMemoryTransport.createLinkedPair();
   await server.connect(serverSide);
   const client = new Client({ name: "test-host", version: "0" }, { capabilities });
@@ -242,6 +244,80 @@ test("a chunk of an unknown model or past the end is an error", async () => {
   await assert.rejects(client.readResource({ uri: "meshy-model://nope/0" }), /no longer open/);
   const { model } = (await view(client, { file_path: tempFile("model.glb", glb()) })).structuredContent;
   await assert.rejects(client.readResource({ uri: `meshy-model://${model.id}/1` }), /out of range/);
+});
+
+test("without a Meshy client the view tool takes a local file only and names no other tool", async () => {
+  const client = await connect({ viewerOnly: true });
+  const { tools } = await client.listTools();
+  const tool = tools.find((t) => t.name === "meshy_view_model");
+  assert.deepEqual(Object.keys(tool.inputSchema.properties), ["file_path"]);
+  assert.deepEqual(tool.inputSchema.required, ["file_path"]);
+  assert.equal(tool.annotations.openWorldHint, false);
+  assert.doesNotMatch(JSON.stringify(tool), /task_id|meshy_download_model|meshy_get_task_status/);
+
+  const bytes = glb(4096);
+  const { model } = (await view(client, { file_path: tempFile("local.glb", bytes) })).structuredContent;
+  assert.ok((await readAll(client, model)).equals(bytes));
+
+  // A task_id is refused by the schema, before anything could reach the API.
+  const byTask = await client
+    .callTool({ name: "meshy_view_model", arguments: { task_id: "018a210d-8ba4-705c-b111-1f1776f7f578" } })
+    .catch((error) => ({ isError: true, content: [{ type: "text", text: String(error) }] }));
+  assert.equal(byTask.isError, true);
+  assert.equal(byTask.structuredContent, undefined);
+
+  const noApps = await connect({ viewerOnly: true, capabilities: {} });
+  const text = (await view(noApps, { file_path: tempFile("local.glb", bytes) })).content[0].text;
+  assert.match(text, /nothing was loaded\. Open the file in a 3D app instead\./);
+});
+
+/** The built server over stdio with only `env` set, as an MCP host starts it. */
+async function startServer(env) {
+  const client = new Client({ name: "test-host", version: "0" }, { capabilities: UI_CAPABILITY });
+  await client.connect(
+    new StdioClientTransport({
+      command: process.execPath,
+      args: ["dist/index.js"],
+      env: { PATH: process.env.PATH, ...env },
+      stderr: "ignore",
+    }),
+  );
+  return client;
+}
+
+test("MESHY_TOOLS=viewer starts a server with the viewer alone, and no API key", async () => {
+  const client = await startServer({ MESHY_TOOLS: "viewer" });
+  try {
+    const { tools } = await client.listTools();
+    assert.deepEqual(tools.map((t) => t.name), ["meshy_view_model"]);
+    assert.deepEqual(Object.keys(tools[0].inputSchema.properties), ["file_path"]);
+    assert.match(client.getInstructions(), /one tool/);
+    assert.doesNotMatch(client.getInstructions(), /meshy_text_to_3d|Cost Confirmation/);
+
+    const bytes = glb(4096);
+    const { model } = (await view(client, { file_path: tempFile("local.glb", bytes) })).structuredContent;
+    assert.ok((await readAll(client, model)).equals(bytes));
+  } finally {
+    await client.close();
+  }
+});
+
+test("an unknown MESHY_TOOLS, or the viewer alone over HTTP, stops the server instead of registering every tool", () => {
+  const start = (env) =>
+    spawnSync(process.execPath, ["dist/index.js"], {
+      env: { PATH: process.env.PATH, ...env },
+      input: "",
+      encoding: "utf8",
+      timeout: 20000,
+    });
+  const typo = start({ MESHY_TOOLS: "veiwer" });
+  assert.equal(typo.status, 1);
+  assert.match(typo.stderr, /MESHY_TOOLS must be "all" or "viewer", not "veiwer"/);
+  assert.doesNotMatch(typo.stderr, /Registering MCP tools/);
+
+  const overHttp = start({ MESHY_TOOLS: "viewer", TRANSPORT: "http" });
+  assert.equal(overHttp.status, 1);
+  assert.match(overHttp.stderr, /MESHY_TOOLS=viewer needs the stdio transport/);
 });
 
 test("the stdio server takes a message over 10 MB and stays connected", async () => {

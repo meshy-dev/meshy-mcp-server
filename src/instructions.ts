@@ -149,3 +149,9 @@ Suggested flow:
 ## Showing a Model in 3D
 To let the user see a finished model in the conversation, call meshy_view_model (free) with its task_id, or file_path for a downloaded .glb. It shows an interactive viewer only in hosts that display MCP Apps.
 `;
+
+/** For MESHY_TOOLS=viewer: the server has the 3D viewer and nothing else. */
+export const VIEWER_ONLY_INSTRUCTIONS = `# Meshy 3D Viewer
+
+This server has one tool. meshy_view_model (free) shows a local .glb file in an interactive 3D viewer in the conversation: pass file_path, the absolute path of the file. It shows the viewer only in hosts that display MCP Apps. The server has no tools that create, change or download models, and it does not call the Meshy API.
+`;
