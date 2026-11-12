@@ -203,6 +203,8 @@ export interface RigApiRequest {
   input_task_id?: string;
   model_url?: string;
   texture_image_url?: string;
+  skeleton_template?: string;
+  include_fingers?: boolean;
 }
 
 // Animate API request body

@@ -3,7 +3,7 @@
  */
 
 import { z } from "zod";
-import { AIModel, OriginAt, TextureResolution, Topology, AnimationPostProcessOp } from "../constants.js";
+import { AIModel, OriginAt, TextureResolution, Topology, AnimationPostProcessOp, SkeletonTemplate } from "../constants.js";
 import { ResponseFormatSchema, UrlSchema } from "./common.js";
 
 /**
@@ -122,7 +122,13 @@ export const RigInputSchema = z.object({
     .describe("Character height in meters; helps scaling"),
   texture_image_url: UrlSchema
     .optional()
-    .describe("Deprecated: leave it out when the model has its own textures (Meshy models and most GLBs do), which the rig keeps. Sending it makes this image the only texture and drops the PBR maps. Only for a model_url GLB without textures: its UV-unwrapped base color (.png, max 20 MB)"),
+    .describe("Deprecated: leave it out when the model has its own textures (Meshy models and most GLBs do), which the rig keeps. Sending it makes this image the only texture and drops the PBR maps. Only for a model_url GLB without textures: its UV-unwrapped base color (.png, max 20 MB). Not with include_fingers."),
+  skeleton_template: z.nativeEnum(SkeletonTemplate)
+    .optional()
+    .describe("The skeleton the rig is delivered on, which sets bone names and hierarchy: pick the one the user's engine or tool expects (mixamo, ue5_mannequin, unity_humanoid, blender_rigify_basic_human, ...). Default meshyrig: Meshy's 24-bone skeleton, in centimeters. Any other value (or include_fingers) delivers meters, that skeleton's bones, an animation clip named retarget_clip and end bones in the FBX. meshy_animate on this rig uses the same skeleton. A model Meshy can't rig on that skeleton fails the task: retry with meshyrig or another value."),
+  include_fingers: z.boolean()
+    .optional()
+    .describe("true adds finger bones to the character's hands, on any skeleton_template (Mixamo names such as LeftHandThumb1 on meshyrig). Same credit cost. Works best on hands with clearly separated fingers; mittens, gloves or stylized hands can get fewer finger bones. The API refuses it without charge for a quad-topology input task (400) or a model it can rig only without fingers (422); if the hands can't be rigged the task fails, so retry or set false. Not with texture_image_url."),
   response_format: ResponseFormatSchema
 }).strict();
 

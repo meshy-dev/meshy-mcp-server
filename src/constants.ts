@@ -181,6 +181,20 @@ export enum OriginAt {
   CENTER = "center"
 }
 
+// Rigging skeleton templates (skeleton_template on POST /openapi/v1/rigging, added 2026-11-10).
+// v1 Rigging defaults to meshyrig (24 bones, centimeters); any other value delivers meters.
+export enum SkeletonTemplate {
+  MESHYRIG = "meshyrig",
+  MIXAMO = "mixamo",
+  UE5_MANNEQUIN = "ue5_mannequin",
+  MAX_BIPED = "max_biped",
+  UNITY_HUMANOID = "unity_humanoid",
+  MAYA_HUMAN_IK = "maya_human_ik",
+  BLENDER_RIGIFY_BASIC_HUMAN = "blender_rigify_basic_human",
+  CC5_HD_NEUTRAL_BASE = "cc5_hd_neutral_base",
+  DAZ_GENESIS9 = "daz_genesis9"
+}
+
 // Text-to-Image / Image-to-Image Models
 // Credits differ by model and by endpoint:
 //   nano-banana: 3 | nano-banana-2: 6 | nano-banana-2-lite: 3 | nano-banana-2-1: 4 | nano-banana-pro: 9
