@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+### Added
+
+- `meshy_rig` takes `skeleton_template` and `include_fingers`, the Rigging API options added on
+  2026-11-10. `skeleton_template` delivers the biped rig on the skeleton the user's engine or tool
+  expects (`mixamo`, `ue5_mannequin`, `max_biped`, `unity_humanoid`, `maya_human_ik`,
+  `blender_rigify_basic_human`, `cc5_hd_neutral_base`, `daz_genesis9`; default `meshyrig`), and
+  `meshy_animate` on that rig uses the same skeleton. `include_fingers: true` adds finger bones.
+  Neither changes the 5-credit cost. Both are forwarded only when set, so existing calls send the
+  same request as before. The tool refuses `include_fingers` with `texture_image_url` before
+  posting, as the API returns 400 for the pair. Scenario D in the server instructions asks for
+  the target engine and passes its template.
+
 ## [0.6.11] - 2026-11-10
 
 ### Fixed

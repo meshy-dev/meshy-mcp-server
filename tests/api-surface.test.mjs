@@ -124,6 +124,28 @@ test("animate takes exactly one of action_id, action_ids, motion_task_id", async
   assert.deepEqual(motion, { rig_task_id: "r", motion_task_id: "m" });
 });
 
+test("rig forwards skeleton_template and include_fingers only when set", async () => {
+  const h = createHarness(registerPostProcessingTools);
+  const { path, body: plain } = await h.call("meshy_rig", { model_url: "https://example.invalid/c.glb" });
+  assert.equal(path, "/openapi/v1/rigging");
+  assert.deepEqual(plain, { height_meters: 1.7, model_url: "https://example.invalid/c.glb" });
+  const { body: full } = await h.call("meshy_rig", { input_task_id: "t", skeleton_template: "ue5_mannequin", include_fingers: true });
+  assert.deepEqual(full, { height_meters: 1.7, input_task_id: "t", skeleton_template: "ue5_mannequin", include_fingers: true });
+  const { body: off } = await h.call("meshy_rig", { input_task_id: "t", include_fingers: false });
+  assert.equal(off.include_fingers, false);
+  assert.equal(h.schema("meshy_rig").safeParse({ input_task_id: "t", skeleton_template: "unreal" }).success, false);
+});
+
+test("rig refuses include_fingers with texture_image_url before posting", async () => {
+  const h = createHarness(registerPostProcessingTools);
+  const text = await h.invalid("meshy_rig", {
+    model_url: "https://example.invalid/c.glb",
+    texture_image_url: "https://example.invalid/t.png",
+    include_fingers: true,
+  });
+  assert.match(text, /include_fingers cannot be used with texture_image_url/);
+});
+
 test("text to motion checks prompt and duration steps", async () => {
   const h = createHarness(registerPostProcessingTools);
   const schema = h.schema("meshy_text_to_motion");

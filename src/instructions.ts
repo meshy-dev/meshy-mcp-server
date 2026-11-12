@@ -87,7 +87,7 @@ Trigger: user mentions rig, animate, walking, running, character animation.
 Suggested flow:
 1. Generate model with pose_mode:"t-pose"; from an image, the game character pair (meshy-t2.5 with target_polycount + texture_model meshy-n1)
 2. Textures (rigging needs a textured humanoid): image-to-3d / multi-image output is already textured (unless should_texture:false); a text-to-3d preview needs meshy_text_to_3d_refine
-3. Rig the model (meshy_rig, ≤300K faces; if over, remesh to reduce polycount first)
+3. Rig the model (meshy_rig, ≤300K faces; if over, remesh to reduce polycount first). For a game engine or DCC tool, ask which one and pass its skeleton_template (e.g. mixamo, ue5_mannequin, unity_humanoid); include_fingers:true adds finger bones. Same cost either way
 4. Download — rigging includes walking+running free, as separate files. For other actions use meshy_animate:
    - preset actions: look up action ids with meshy_list_animations (free) — never guess ids. action_ids puts up to 10 clips in one file (include the walk/run ids to bundle them too)
    - a described motion ("a backflip into a crouch"): meshy_text_to_motion, then meshy_animate with motion_task_id (biped rigs only)

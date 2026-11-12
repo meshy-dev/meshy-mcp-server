@@ -247,6 +247,8 @@ Meshy N1: { input_task_id: "abc-123", ai_model: "meshy-n1", multiview_image_urls
 
 REQUIREMENT: a textured humanoid (biped) model with a clear body and limbs, ≤300,000 faces (checked first; remesh if over). model_url must be a .glb facing +Z. Generate characters with pose_mode "t-pose" for the best rig.
 
+Options: skeleton_template delivers the rig on the skeleton the user's engine or tool expects (mixamo, ue5_mannequin, unity_humanoid, ...; default meshyrig); include_fingers adds finger bones. Neither changes the cost.
+
 Next steps: meshy_download_model (task_type "rigging") returns the rigged model and walk/run URLs. Other actions: meshy_list_animations → meshy_animate. A described motion: meshy_text_to_motion → meshy_animate with motion_task_id.`,
       inputSchema: RigInputSchema,
       outputSchema: TaskCreatedOutputSchema,
@@ -265,6 +267,16 @@ Next steps: meshy_download_model (task_type "rigging") returns the rigged model 
             content: [{
               type: "text",
               text: "Error: Either input_task_id or model_url must be provided."
+            }]
+          };
+        }
+
+        if (params.include_fingers && params.texture_image_url) {
+          return {
+            isError: true,
+            content: [{
+              type: "text",
+              text: "Error: include_fingers cannot be used with texture_image_url (the API returns 400). Leave out texture_image_url (it is deprecated; a model with its own textures keeps them), or set include_fingers to false."
             }]
           };
         }
@@ -305,6 +317,8 @@ The model exceeds the ${maxFaces}-face limit for rigging.
         if (params.input_task_id) request.input_task_id = params.input_task_id;
         if (params.model_url) request.model_url = params.model_url;
         if (params.texture_image_url) request.texture_image_url = params.texture_image_url;
+        if (params.skeleton_template !== undefined) request.skeleton_template = params.skeleton_template;
+        if (params.include_fingers !== undefined) request.include_fingers = params.include_fingers;
 
         const response = await client.post<CreateTaskApiResponse>("/openapi/v1/rigging", request as unknown as Record<string, unknown>);
         const taskId = response.result;
