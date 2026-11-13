@@ -127,7 +127,10 @@ async function runStdio() {
   // One client per process, so its handshake clientInfo names the host.
   await initializeServer(() => server.server.getClientVersion());
 
-  const transport = new StdioServerTransport();
+  // Recent SDK versions close the stdio connection on any incoming message over
+  // 10 MB (1.32.2 does, 1.27.1 did not), which would cut off a model_url
+  // `data:` URI (documented up to 100 MB).
+  const transport = new StdioServerTransport(process.stdin, process.stdout, { maxBufferSize: 128 * 1024 * 1024 });
   await server.connect(stripSchemaDialect(transport));
 
   console.error("✓ Meshy MCP Server running via stdio");
