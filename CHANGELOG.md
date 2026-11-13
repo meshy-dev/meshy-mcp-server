@@ -2,6 +2,20 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- The stdio server accepts incoming messages up to 128 MB. `@modelcontextprotocol/sdk` 1.32.2,
+  which a fresh install resolves under the previous `^1.6.1` range, closes the connection on any
+  message over 10 MB, so a `model_url` `data:` URI above that size (documented up to 100 MB) ended
+  the session with "Connection closed". With 1.27.1, the version in the lockfile, it did not, so
+  the tests never saw it.
+
+### Changed
+
+- Requires `@modelcontextprotocol/sdk` 1.32.2 or later (was `^1.6.1`, with 1.27.1 in the
+  lockfile) and `zod` 3.25 or later, which that SDK needs. The lockfile and CI now run the SDK
+  version a fresh install gets.
+
 ## [0.6.11] - 2026-11-10
 
 ### Fixed
