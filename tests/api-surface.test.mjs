@@ -494,6 +494,25 @@ test("task status carries type-specific results and fits its output schema", asy
   }
 });
 
+test("a failed task whose task_error carries nulls still fits the output schema", async () => {
+  const { TaskStatusOutputSchema } = await import("../dist/schemas/output.js");
+  const failed = () => ({
+    id: "f", type: "text-to-3d-preview", status: "FAILED", progress: 0, mode: "preview",
+    model_urls: {}, texture_urls: [], thumbnail_url: "", expires_at: null, input: { prompt: "chair" }, output: null,
+    task_error: { type: "server_error", code: null, message: "Something went wrong", doc_url: null },
+  });
+  const h = createHarness(registerTaskTools, { "/openapi/v2/text-to-3d/f": failed });
+  for (const wait of [false, true]) {
+    const result = await h.run("meshy_get_task_status", { task_id: "f", task_type: "text-to-3d", wait });
+    const out = JSON.parse(JSON.stringify(result.structuredContent));
+    assert.equal(out.error_type, "server_error", JSON.stringify(result));
+    assert.equal(out.error_message, "Something went wrong");
+    assert.equal("error_code" in out, false);
+    assert.equal("error_doc_url" in out, false);
+    assert.equal(TaskStatusOutputSchema.strict().safeParse(out).success, true, JSON.stringify(out));
+  }
+});
+
 test("list_tasks queries the five generation and image types unless told otherwise", async () => {
   const h = createHarness(registerTaskTools, {
     "/openapi/v1/rigging": [{ id: "r", status: "SUCCEEDED", created_at: 2 }],

@@ -22,7 +22,7 @@ import {
   TaskType,
   CHARACTER_LIMIT
 } from "../constants.js";
-import { Task, GetTaskResponse, TextureUrlsObject } from "../types.js";
+import { Task, GetTaskResponse, TaskError, TextureUrlsObject } from "../types.js";
 import { DEFAULT_LIST_TASK_TYPES } from "../utils/endpoints.js";
 import { describeTaskError } from "../utils/response-formatter.js";
 import {
@@ -241,6 +241,16 @@ function formatTask(task: Task, format: ResponseFormat): string {
   }
 }
 
+/** A failed task's task_error as output fields; the API may send null for an unknown code or guide. */
+function taskErrorFields(error?: TaskError | null) {
+  return {
+    error_type: error?.type ?? undefined,
+    error_code: error?.code ?? undefined,
+    error_message: error?.message ?? undefined,
+    error_doc_url: error?.doc_url ?? undefined
+  };
+}
+
 /** Type-specific result fields for structuredContent; only the ones the task has. */
 function taskExtras(task: Task) {
   return {
@@ -456,10 +466,7 @@ wait=true polls at the API's suggested interval (else 5s→30s backoff) until SU
               face_count: task.face_count,
               consumed_credits: task.consumed_credits,
               ...taskExtras(task),
-              error_type: task.task_error?.type,
-              error_code: task.task_error?.code,
-              error_message: task.task_error?.message,
-              error_doc_url: task.task_error?.doc_url
+              ...taskErrorFields(task.task_error)
             }
           };
         } catch (error) {
@@ -536,10 +543,8 @@ ${retryHint}`
               task_type: result.taskType,
               status: "FAILED",
               progress,
-              error_type: task.task_error?.type,
-              error_code: task.task_error?.code,
+              ...taskErrorFields(task.task_error),
               error_message: task.task_error?.message || "Unknown error",
-              error_doc_url: task.task_error?.doc_url,
               wait_time_seconds: waitTimeSec,
               poll_count: polls
             }
