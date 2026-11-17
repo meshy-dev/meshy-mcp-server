@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+## [0.6.12] - 2026-11-17
+
+### Fixed
+
+- `meshy_get_task_status` with `wait: false` no longer fails on a failed task whose `task_error`
+  has `null` for `code` or `doc_url`. The API sends `null` there when the cause is unknown (timeouts,
+  server errors), and the tool copied it into its structured output, where those fields are
+  optional strings, so the client got an output validation error instead of the failure. Unknown
+  values are now left out, as they already were when the API omitted them.
+
 ## [0.6.11] - 2026-11-10
 
 ### Fixed
