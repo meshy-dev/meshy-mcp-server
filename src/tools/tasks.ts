@@ -241,7 +241,6 @@ function formatTask(task: Task, format: ResponseFormat): string {
   }
 }
 
-/** Type-specific result fields for structuredContent; only the ones the task has. */
 /** A failed task's task_error as output fields; the API may send null for an unknown code or guide. */
 function taskErrorFields(error?: TaskError | null) {
   return {
@@ -252,6 +251,7 @@ function taskErrorFields(error?: TaskError | null) {
   };
 }
 
+/** Type-specific result fields for structuredContent; only the ones the task has. */
 function taskExtras(task: Task) {
   return {
     thumbnail_url: task.thumbnail_url || undefined,
