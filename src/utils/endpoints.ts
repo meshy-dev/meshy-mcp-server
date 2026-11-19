@@ -22,6 +22,7 @@ const TASK_ENDPOINTS: Record<TaskType, string> = {
   [TaskType.PRINT_REPAIR]: "/openapi/v1/print/repair",
   [TaskType.PRINT_SPLIT]: "/openapi/v1/print/split",
   [TaskType.TEXT_TO_MOTION]: "/openapi/v1/text-to-motion",
+  [TaskType.RELIEF]: "/openapi/v1/relief",
   // Creative Lab — stage-specific bases. base+"/:id" = GET status, base alone = list, base = POST create.
   [TaskType.CREATIVE_LAB_FIGURE_PROTOTYPE]: "/openapi/creative-lab/figure/v1/prototype",
   [TaskType.CREATIVE_LAB_FIGURE_BUILD]: "/openapi/creative-lab/figure/v1/build",

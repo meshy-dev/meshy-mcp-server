@@ -7,6 +7,7 @@ import { registerBalanceTool } from "../dist/tools/balance.js";
 import { registerCreativeLabTools } from "../dist/tools/creative-lab.js";
 import { registerTaskTools } from "../dist/tools/tasks.js";
 import { registerWorkspaceTools } from "../dist/tools/workspace.js";
+import { registerReliefTools } from "../dist/tools/relief.js";
 
 // Offline request checks for the endpoints and options added or changed in 0.6.3.
 // The fake client answers every GET with a finished task of the type the path
@@ -556,4 +557,247 @@ test("a truncated list continues right after the tasks it showed", async () => {
   assert.ok(shown < 40, `expected truncation, got ${shown}`);
   assert.equal(page.structuredContent.has_more, true);
   assert.equal(page.structuredContent.next_offset, shown);
+});
+
+// Relief: one photo → a bas-relief model and a depth map (POST /openapi/v1/relief, 20 credits).
+
+test("relief sends only the fields the caller set, to its own route", async () => {
+  const h = createHarness(registerReliefTools);
+  const { path, body } = await h.call("meshy_relief", { image_url: PHOTO });
+  assert.equal(path, "/openapi/v1/relief");
+  assert.deepEqual(body, { image_url: PHOTO });
+
+  const every = {
+    variant: "high",
+    should_generate_model: true,
+    size_mm: 120,
+    carving_mode: "engrave",
+    carving_depth_mm: 10,
+    remove_base: false,
+    removal_threshold: 0.2,
+    base_thickness_mm: 3,
+    bend_mode: "convex",
+    bend_axis: "yz",
+    bend_angle: 90,
+    mesh_resolution: 2048,
+    target_formats: ["glb", "obj", "stl", "3mf"],
+    color_mapping: true,
+  };
+  const result = await h.run("meshy_relief", { image_url: PHOTO, ...every });
+  assert.notEqual(result.isError, true, JSON.stringify(result));
+  assert.deepEqual(h.posts.at(-1).body, { image_url: PHOTO, ...every });
+  assert.match(result.structuredContent.message, /20 credits/);
+  assert.match(result.content[0].text, /task_type "relief"/);
+
+  const depth = await h.run("meshy_relief", { image_url: PHOTO, should_generate_model: false });
+  assert.deepEqual(h.posts.at(-1).body, { image_url: PHOTO, should_generate_model: false });
+  assert.match(depth.structuredContent.message, /depth map only/);
+});
+
+test("relief reads a local photo into a data URI", async () => {
+  const fs = await import("node:fs");
+  const os = await import("node:os");
+  const path = await import("node:path");
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "meshy-relief-"));
+  try {
+    const file = path.join(dir, "photo.png");
+    fs.writeFileSync(file, Buffer.from([0x89, 0x50, 0x4e, 0x47]));
+    const { body } = await createHarness(registerReliefTools).call("meshy_relief", { file_path: file });
+    assert.equal(body.image_url, "data:image/png;base64,iVBORw==");
+    const text = await createHarness(registerReliefTools).invalid("meshy_relief", { file_path: path.join(dir, "photo.gif") });
+    assert.match(text, /Unsupported image format/);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("relief refuses values outside the API's ranges before anything is sent", () => {
+  const schema = createHarness(registerReliefTools).schema("meshy_relief");
+  for (const [label, input] of [
+    ["variant medium", { variant: "medium" }],
+    ["size_mm 19", { size_mm: 19 }],
+    ["size_mm 251", { size_mm: 251 }],
+    ["carving_mode stamp", { carving_mode: "stamp" }],
+    ["carving_depth_mm -1", { carving_depth_mm: -1 }],
+    ["carving_depth_mm 61", { carving_depth_mm: 61 }],
+    ["removal_threshold 0", { removal_threshold: 0 }],
+    ["removal_threshold 1.01", { removal_threshold: 1.01 }],
+    ["base_thickness_mm 10.5", { base_thickness_mm: 10.5 }],
+    ["base_thickness_mm -1", { base_thickness_mm: -1 }],
+    ["bend_mode wave", { bend_mode: "wave" }],
+    ["bend_axis xy", { bend_axis: "xy" }],
+    ["bend_angle -1", { bend_angle: -1 }],
+    ["bend_angle 361", { bend_angle: 361 }],
+    ["mesh_resolution 511", { mesh_resolution: 511 }],
+    ["mesh_resolution 2049", { mesh_resolution: 2049 }],
+    ["mesh_resolution 1024.5", { mesh_resolution: 1024.5 }],
+    ["target_formats blend", { target_formats: ["blend"] }],
+    ["target_formats repeated", { target_formats: ["stl", "stl"] }],
+    ["target_formats empty", { target_formats: [] }],
+    ["color_mapping as text", { color_mapping: "yes" }],
+    ["an unknown field", { depth: 3 }],
+  ]) {
+    assert.equal(schema.safeParse({ image_url: PHOTO, ...input }).success, false, label);
+  }
+  for (const input of [
+    { size_mm: 20, carving_depth_mm: 0, removal_threshold: 0.01, bend_angle: 0, mesh_resolution: 512 },
+    { size_mm: 250, carving_depth_mm: 60, removal_threshold: 1, bend_angle: 360, mesh_resolution: 2048, base_thickness_mm: 10 },
+    { target_formats: ["glb", "obj", "fbx", "stl", "usdz", "3mf"] },
+  ]) {
+    assert.equal(schema.safeParse({ image_url: PHOTO, ...input }).success, true, JSON.stringify(input));
+  }
+});
+
+test("relief base thickness: 0.1–10 with a base, omitted or 0 with remove_base", async () => {
+  for (const [input, message] of [
+    [{ remove_base: true, base_thickness_mm: 1 }, /omit base_thickness_mm or send 0/],
+    [{ remove_base: true, base_thickness_mm: 0.1 }, /omit base_thickness_mm or send 0/],
+    [{ base_thickness_mm: 0 }, /0\.1–10 \(0 only with remove_base true\)/],
+    [{ remove_base: false, base_thickness_mm: 0.05 }, /0\.1–10/],
+  ]) {
+    const text = await createHarness(registerReliefTools).invalid("meshy_relief", { image_url: PHOTO, ...input });
+    assert.match(text, message, JSON.stringify(input));
+  }
+  assert.match(await createHarness(registerReliefTools).invalid("meshy_relief", {}), /image_url or file_path/);
+  for (const input of [
+    { remove_base: true, base_thickness_mm: 0 },
+    { remove_base: true },
+    { base_thickness_mm: 0.1 },
+    { remove_base: false, base_thickness_mm: 10 },
+  ]) {
+    const { body } = await createHarness(registerReliefTools).call("meshy_relief", { image_url: PHOTO, ...input });
+    assert.deepEqual(body, { image_url: PHOTO, ...input });
+  }
+});
+
+const RELIEF_DONE = {
+  id: "r",
+  type: "relief",
+  status: "SUCCEEDED",
+  progress: 100,
+  consumed_credits: 20,
+  created_at: 1699999999000,
+  finished_at: 1700000060000,
+  expires_at: 1700259260000,
+  task_error: null,
+};
+
+test("relief tasks are read, listed and deleted on the relief route", async () => {
+  const { TaskStatusOutputSchema } = await import("../dist/schemas/output.js");
+  const colored = () => ({
+    ...RELIEF_DONE,
+    model_urls: { glb: "https://example.invalid/model.glb", obj: "https://example.invalid/model.obj", mtl: "https://example.invalid/model.mtl" },
+    texture_urls: [{ base_color: "https://example.invalid/texture_0.png" }],
+    depth_map_url: "https://example.invalid/depth.png",
+    thumbnail_url: "https://example.invalid/preview.png",
+  });
+  const depthOnly = () => ({ ...RELIEF_DONE, id: "d", model_urls: {}, depth_map_url: "https://example.invalid/depth.png", thumbnail_url: "" });
+  const h = createHarness(registerTaskTools, {
+    "/openapi/v1/relief/r": colored,
+    "/openapi/v1/relief/d": depthOnly,
+    "/openapi/v1/relief": [colored(), depthOnly()],
+  });
+  for (const wait of [false, true]) {
+    const result = await h.run("meshy_get_task_status", { task_id: "r", task_type: "relief", wait });
+    const out = JSON.parse(JSON.stringify(result.structuredContent));
+    assert.equal(out.task_type, "relief", JSON.stringify(result));
+    assert.equal(out.depth_map_url, "https://example.invalid/depth.png");
+    assert.equal(out.model_urls.glb, "https://example.invalid/model.glb");
+    assert.equal(TaskStatusOutputSchema.strict().safeParse(out).success, true, JSON.stringify(out));
+    assert.match(result.content[0].text, /Depth [Mm]ap/);
+
+    const only = await h.run("meshy_get_task_status", { task_id: "d", task_type: "relief", wait });
+    assert.equal(only.structuredContent.model_urls, undefined);
+    assert.equal(only.structuredContent.thumbnail_url, undefined);
+    assert.equal(only.structuredContent.depth_map_url, "https://example.invalid/depth.png");
+    assert.match(only.content[0].text, wait ? /Depth map only/ : /Available Formats\*\*: none/);
+  }
+  assert.match((await h.run("meshy_get_task_status", { task_id: "r", task_type: "relief" })).content[0].text, /Color: GLB, OBJ, FBX and USDZ/);
+
+  const listed = await h.run("meshy_list_tasks", { task_type: "relief" });
+  assert.deepEqual(h.gets.at(-1), { path: "/openapi/v1/relief", query: { page_size: 20, page_num: 1, sort_by: "-created_at" } });
+  assert.deepEqual(listed.structuredContent.tasks.map((t) => [t.id, t.task_type]), [["r", "relief"], ["d", "relief"]]);
+
+  const pending = createHarness(registerTaskTools, { "/openapi/v1/relief/p": () => ({ id: "p", type: "relief", status: "PENDING" }) });
+  const deleted = await pending.run("meshy_cancel_task", { task_id: "p", task_type: "relief" });
+  assert.deepEqual(pending.deletes, ["/openapi/v1/relief/p"]);
+  assert.match(deleted.structuredContent.message, /refunded/);
+});
+
+test("relief download saves the model, its depth map and, for OBJ, the material and texture it names", async () => {
+  const { createServer } = await import("node:http");
+  const fs = await import("node:fs");
+  const os = await import("node:os");
+  const path = await import("node:path");
+  const files = {
+    "/model.obj": "mtllib model.mtl\nusemtl m\nv 0 0 0\n",
+    "/model.mtl": "newmtl m\nmap_Kd texture_0.png\n",
+  };
+  const server = createServer((req, res) => res.end(files[req.url] ?? req.url));
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "meshy-relief-dl-"));
+  const cwd = process.cwd();
+  const read = (file) => fs.readFileSync(file, "utf-8");
+  try {
+    const relief = () => ({
+      ...RELIEF_DONE,
+      model_urls: { glb: `${base}/model.glb`, stl: `${base}/model.stl`, obj: `${base}/model.obj`, mtl: `${base}/model.mtl` },
+      texture_urls: [{ base_color: `${base}/texture_0.png` }],
+      depth_map_url: `${base}/depth.png`,
+      thumbnail_url: `${base}/preview.png`,
+    });
+    const h = createHarness(registerTaskTools, { "/openapi/v1/relief/r": relief });
+
+    // GLB by default: the depth map lands next to it.
+    const glb = await h.run("meshy_download_model", { task_id: "r", task_type: "relief", save_to: path.join(dir, "plaque.glb") });
+    assert.notEqual(glb.isError, true, JSON.stringify(glb));
+    assert.equal(glb.structuredContent.format, "glb");
+    assert.equal(read(path.join(dir, "plaque.glb")), "/model.glb");
+    assert.equal(glb.structuredContent.depth_map_path, path.join(dir, "plaque_depth.png"));
+    assert.equal(read(path.join(dir, "plaque_depth.png")), "/depth.png");
+
+    // OBJ: the MTL and texture keep the names the OBJ and MTL refer to.
+    const obj = await h.run("meshy_download_model", { task_id: "r", task_type: "relief", format: "obj", save_to: path.join(dir, "obj", "plaque.obj") });
+    assert.notEqual(obj.isError, true, JSON.stringify(obj));
+    assert.equal(obj.structuredContent.mtl_path, path.join(dir, "obj", "model.mtl"));
+    assert.equal(read(path.join(dir, "obj", "model.mtl")), files["/model.mtl"]);
+    assert.deepEqual(obj.structuredContent.texture_paths, [path.join(dir, "obj", "texture_0.png")]);
+    assert.equal(read(path.join(dir, "obj", "plaque_depth.png")), "/depth.png");
+
+    // STL stays white: no texture beside it.
+    const stl = await h.run("meshy_download_model", { task_id: "r", task_type: "relief", format: "stl", save_to: path.join(dir, "stl", "plaque.stl") });
+    assert.equal(stl.structuredContent.texture_paths, undefined, JSON.stringify(stl));
+    assert.deepEqual(fs.readdirSync(path.join(dir, "stl")).sort(), ["plaque.stl", "plaque_depth.png"]);
+
+    // A format the task was not made in: refused, naming the formats it has.
+    const fbx = await h.run("meshy_download_model", { task_id: "r", task_type: "relief", format: "fbx", save_to: path.join(dir, "fbx", "plaque.fbx") });
+    assert.equal(fbx.isError, true);
+    assert.match(fbx.content[0].text, /no FBX file\. Its formats: glb, stl, obj\./);
+    assert.match(fbx.content[0].text, /target_formats/);
+    assert.equal(fs.existsSync(path.join(dir, "fbx")), false);
+
+    // Depth-map-only task: the depth map alone, and the reply says so.
+    const depthOnly = createHarness(registerTaskTools, {
+      "/openapi/v1/relief/d": () => ({ ...RELIEF_DONE, id: "d", model_urls: {}, depth_map_url: `${base}/depth.png`, thumbnail_url: "" }),
+    });
+    const only = await depthOnly.run("meshy_download_model", { task_id: "d", task_type: "relief", format: "stl", save_to: path.join(dir, "only", "photo.stl") });
+    assert.notEqual(only.isError, true, JSON.stringify(only));
+    assert.equal(only.structuredContent.depth_map_only, true);
+    assert.match(only.content[0].text, /depth map and no model, so format "stl" was not used/);
+    assert.deepEqual(fs.readdirSync(path.join(dir, "only")), ["photo_depth.png"]);
+
+    // Without save_to: the project folder, with relief-named files.
+    process.chdir(dir);
+    const managed = await h.run("meshy_download_model", { task_id: "r", task_type: "relief", format: "stl" });
+    const project = managed.structuredContent.project_dir;
+    assert.equal(managed.structuredContent.local_path, path.join(project, "relief.stl"));
+    assert.equal(read(path.join(project, "relief_depth.png")), "/depth.png");
+    const meta = JSON.parse(read(path.join(project, "metadata.json")));
+    assert.deepEqual(meta.tasks.map((t) => [t.task_type, t.stage, t.files]), [["relief", "relief", ["relief.stl", "relief_depth.png"]]]);
+  } finally {
+    process.chdir(cwd);
+    server.close();
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });

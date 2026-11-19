@@ -4,12 +4,13 @@
 
 ## Features
 
-28 tools covering the full Meshy API:
+29 tools covering the full Meshy API:
 
 | Category | Tools |
 |----------|-------|
 | **3D Generation** | `meshy_text_to_3d`, `meshy_text_to_3d_refine`, `meshy_image_to_3d`, `meshy_multi_image_to_3d` |
 | **Creative Lab** | `meshy_creative_lab` (9 products) |
+| **Relief** | `meshy_relief` |
 | **Post-Processing** | `meshy_remesh`, `meshy_retexture` |
 | **Rigging & Animation** | `meshy_rig`, `meshy_animate`, `meshy_text_to_motion`, `meshy_list_animations` |
 | **Conversion** | `meshy_convert`, `meshy_resize`, `meshy_uv_unwrap` |
@@ -35,6 +36,7 @@
 - **Auto-Rigging & Animation**: Add skeletons and animations to humanoid characters. `meshy_animate` takes one preset action, up to 10 actions as clips in one file, or a generated motion (v0.6.3); `meshy_list_animations` finds action ids
 - **Text to Motion (v0.6.3)**: generate a motion clip from a description (`prime` FBX, 10 credits / `swift` BVH, 3 credits) and apply it to a rigged character
 - **Creative Lab**: One tool — a photo → a finished, print-ready product. **9 products**: figure, lamp, keychain (with a printed `name_text`), fridge-magnet, vinyl-figure, brick-figure, keycap, and (v0.6.3) fidget-pixel and fidget-collapsible. Runs the whole pipeline and returns only the final 3D model; build options and output format are configurable
+- **Relief**: `meshy_relief` turns one photo into a bas-relief model and a 16-bit grayscale depth map, for 3D printing, laser engraving and CNC carving. `variant` `high` (deep, for printing) or `low` (shallow, for engraving and plaques); size, carving, base, bend and mesh resolution are configurable; `target_formats` picks GLB, OBJ, FBX, STL, USDZ and 3MF (default GLB + STL); `color_mapping` colors the GLB, OBJ, FBX and USDZ files; `should_generate_model: false` returns the depth map only. 20 credits, paid plan. `meshy_download_model` saves the model with its depth map
 - **Format & Size Utilities**: `convert` (format conversion incl. 3MF, 1 credit), `resize` (real-world dimensions, 1 credit), `uv_unwrap` (clean UV layout for external texturing, 5 credits)
 - **2D Image Models**: `text_to_image` / `image_to_image` support `nano-banana`, `nano-banana-2`, `nano-banana-2-lite`, `nano-banana-2-1`, `nano-banana-pro`, `gpt-image-2`, `gpt-image-2-5-flare` and `gpt-image-2-5-sunburst`, with transparent-background output (`remove_background`). Image-to-image can edit an earlier result by `input_task_id`
 - **3D Printability Suite**:
@@ -43,7 +45,7 @@
   - `process_multicolor` — 10-credit multi-color 3MF for AMS/MMU printers, `realistic` or `cartoon` style, with a slicer preset for 9 printer brands
   - `auto_split` (v0.6.3) — 10 credits: cut a model into printable parts automatically, by named parts, or by color, with optional connectors
 - **Usage reporting (v0.6.3)**: `list_usage` lists finished API tasks with their credits (Studio / Enterprise teams)
-- **Task and model listing (v0.6.3)**: `list_tasks` lists tasks of any status from text-to-3d, image-to-3d, multi-image-to-3d, text-to-image and image-to-image by default (pass `task_types` for printing, rigging, animation, motion, post-processing or Creative Lab tasks); `list_models` lists finished 3D models of any model-producing type (image-to-3d by default), each with the `task_type` and formats to download. Before 0.6.3, `list_tasks` queried every type and `list_models` listed text-to-3d only; see the CHANGELOG's behavior changes
+- **Task and model listing (v0.6.3)**: `list_tasks` lists tasks of any status from text-to-3d, image-to-3d, multi-image-to-3d, text-to-image and image-to-image by default (pass `task_types` for printing, rigging, animation, motion, post-processing, relief or Creative Lab tasks); `list_models` lists finished 3D models of any model-producing type (image-to-3d by default), each with the `task_type` and formats to download. Before 0.6.3, `list_tasks` queried every type and `list_models` listed text-to-3d only; see the CHANGELOG's behavior changes
 - **Slicer Integration**: Auto-detect 7 installed slicers (OrcaSlicer, Bambu, Creality, Elegoo, Anycubic, PrusaSlicer, Cura; all but Cura open multi-color 3MF) and return launch commands the agent can execute
 - **Smart File Organization**: Auto-saves to `meshy_output/` with project folders, metadata, and history tracking
 - **Built-in Workflow Intelligence**: Server instructions guide the agent through correct tool chains for each use case
@@ -76,7 +78,7 @@ Generation cost ([pricing](https://docs.meshy.ai/en/api/pricing)):
 
 Smart Topology generates directly at `target_polycount` and skips remeshing: `meshy-t2` 100–15,000 faces (default 4,000), `meshy-t2.5` 100–30,000 (default 15,000). Without `ai_model`, `model_type: "smart-topology"` uses `meshy-t2.5`. Output is triangle-only. For standard models, `target_polycount` needs `should_remesh: true` and is overridden by `decimation_mode`.
 
-Retexture is 10 credits (15 at 8K); Meshy N1 (`meshy-n1`) is 10 credits and 2K only. Creative Lab is **36** credits per product (6 + 30; lamp is 30 + 6) except **keycap, 62** (12 + 50) and **fidget-collapsible, 6** (single stage). Images: nano-banana 3, nano-banana-2 6, nano-banana-2-lite 3, nano-banana-2-1 4, nano-banana-pro 9, GPT Image models 9 (text) / 12 (image). Other tools: remesh 5, rig 5, animate 3 per action, text-to-motion 10 (prime) / 3 (swift), convert 1, resize 1, uv-unwrap 5, analyze-printability free, repair-printability 10, multicolor 10, auto-split 10.
+Retexture is 10 credits (15 at 8K); Meshy N1 (`meshy-n1`) is 10 credits and 2K only. Creative Lab is **36** credits per product (6 + 30; lamp is 30 + 6) except **keycap, 62** (12 + 50) and **fidget-collapsible, 6** (single stage). Images: nano-banana 3, nano-banana-2 6, nano-banana-2-lite 3, nano-banana-2-1 4, nano-banana-pro 9, GPT Image models 9 (text) / 12 (image). Other tools: remesh 5, rig 5, animate 3 per action, text-to-motion 10 (prime) / 3 (swift), convert 1, resize 1, uv-unwrap 5, analyze-printability free, repair-printability 10, multicolor 10, auto-split 10, relief 20 (depth map only included).
 
 ## Prerequisites
 

@@ -7,6 +7,7 @@ import axios from "axios";
 import * as fs from "fs";
 import * as path from "path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { MeshyClient, getTaskWithAutoInference, pollTask, listAcrossTypes } from "../services/meshy-client.js";
 import { handleMeshyError } from "../services/error-handler.js";
 import {
@@ -16,11 +17,13 @@ import {
   DownloadModelInputSchema
 } from "../schemas/tasks.js";
 import { TaskStatusOutputSchema } from "../schemas/output.js";
+import { RELIEF_COLOR_FORMATS, RELIEF_FORMATS } from "../schemas/relief.js";
 import {
   ResponseFormat,
   TaskStatus,
   TaskType,
-  CHARACTER_LIMIT
+  CHARACTER_LIMIT,
+  RELIEF_CREDITS
 } from "../constants.js";
 import { Task, GetTaskResponse, TaskError, TextureUrlsObject } from "../types.js";
 import { DEFAULT_LIST_TASK_TYPES } from "../utils/endpoints.js";
@@ -129,6 +132,11 @@ async function downloadFileToLocal(url: string, saveTo: string): Promise<number>
   });
 }
 
+/** The first texture set: texture_urls is an array of sets (text-to-3d, relief) or a single set. */
+function firstTextureSet(textures: Task["texture_urls"]): TextureUrlsObject | undefined {
+  return Array.isArray(textures) ? textures[0] : textures;
+}
+
 const RETENTION_MS = 3 * 24 * 60 * 60 * 1000;
 
 /**
@@ -179,7 +187,8 @@ function formatTask(task: Task, format: ResponseFormat): string {
       lines.push("## Result");
 
       const formats = Object.keys(task.model_urls).filter(k => task.model_urls![k as keyof typeof task.model_urls]);
-      lines.push(`- **Available Formats**: ${formats.join(', ').toUpperCase()}`);
+      lines.push(`- **Available Formats**: ${formats.length > 0 ? formats.join(', ').toUpperCase() : "none"}`);
+      if (task.depth_map_url) lines.push(`- **Depth Map**: ${task.depth_map_url}`);
       if (task.thumbnail_url) lines.push(`- **Thumbnail**: ${task.thumbnail_url}`);
       if (task.alpha_thumbnail_url) lines.push(`- **Alpha Thumbnail**: ${task.alpha_thumbnail_url}`);
       if (typeof task.consumed_credits === "number") lines.push(`- **Credits Consumed**: ${task.consumed_credits}`);
@@ -256,6 +265,7 @@ function taskExtras(task: Task) {
   return {
     thumbnail_url: task.thumbnail_url || undefined,
     alpha_thumbnail_url: task.alpha_thumbnail_url || undefined,
+    depth_map_url: task.depth_map_url || undefined,
     printability: task.printability ?? undefined,
     part_count: task.part_count ?? undefined,
     prompt_ignored: task.prompt_ignored ?? undefined,
@@ -342,6 +352,15 @@ function buildWaitSuccessResponse(
     lines.push("");
   }
 
+  // Relief results: the depth map always, the model unless it was depth-map-only
+  if (taskType === TaskType.RELIEF) {
+    lines.push("## Relief Result");
+    if (!Object.values(task.model_urls ?? {}).some(Boolean)) lines.push("- Depth map only: no model (should_generate_model false)");
+    if (task.depth_map_url) lines.push("- Depth map: 16-bit grayscale PNG of relative heights, usable as a laser / CNC height map");
+    if (firstTextureSet(task.texture_urls)?.base_color) lines.push("- Color: GLB, OBJ, FBX and USDZ carry the photo's color; STL and 3MF are white");
+    lines.push("");
+  }
+
   // Auto Split results
   if (taskType === TaskType.PRINT_SPLIT && task.part_count !== undefined) {
     lines.push(`## Split Result`);
@@ -415,6 +434,228 @@ function buildWaitSuccessResponse(
       face_count: task.face_count,
       consumed_credits: task.consumed_credits,
       ...taskExtras(task)
+    }
+  };
+}
+
+/**
+ * The file a downloaded OBJ or MTL names on its first `keyword` line (mtllib, map_Kd), read from
+ * the file's start. Only the base name: the named file is saved next to the one that names it.
+ */
+function referencedFile(filePath: string, keyword: string): string | undefined {
+  try {
+    const fd = fs.openSync(filePath, "r");
+    try {
+      const head = Buffer.alloc(64 * 1024);
+      const read = fs.readSync(fd, head, 0, head.length, 0);
+      const line = head.toString("utf-8", 0, read).match(new RegExp(`^\\s*${keyword}\\s+(.+?)\\s*$`, "m"));
+      // The file name is the last token (map_Kd may put options such as -s 1 1 1 before it).
+      const name = line ? path.basename(line[1].split(/\s+/).pop() ?? "") : "";
+      return name && name !== "." && name !== ".." ? name : undefined;
+    } finally {
+      fs.closeSync(fd);
+    }
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Save a finished relief task: the model in params.format (default glb; an OBJ with its MTL and
+ * texture) and the depth map next to it. A depth-map-only task has empty model_urls and saves the
+ * depth map alone.
+ */
+async function downloadRelief(task: GetTaskResponse, params: z.infer<typeof DownloadModelInputSchema>): Promise<CallToolResult> {
+  const modelUrls = (task.model_urls ?? {}) as Record<string, string | undefined>;
+  const formats = Object.keys(modelUrls).filter(k => modelUrls[k] && k !== "mtl");
+  const depthUrl = task.depth_map_url || undefined;
+  const depthOnly = formats.length === 0;
+  const fmt = params.format ?? "glb";
+  const modelUrl = depthOnly ? undefined : modelUrls[fmt];
+
+  if (!depthOnly && !modelUrl) {
+    const how = (RELIEF_FORMATS as readonly string[]).includes(fmt)
+      ? `A relief task has only the formats listed in target_formats when it was created, and other tools cannot convert it: for ${fmt.toUpperCase()}, create a new relief task with "${fmt}" in target_formats (${RELIEF_CREDITS} credits).`
+      : `Relief makes ${RELIEF_FORMATS.join(", ")} only.`;
+    return {
+      isError: true,
+      content: [{ type: "text", text: `Error: this relief task has no ${fmt.toUpperCase()} file. Its formats: ${formats.join(", ")}. ${how}` }]
+    };
+  }
+  if (depthOnly && !depthUrl) {
+    return {
+      isError: true,
+      content: [{ type: "text", text: "Error: this relief task has neither a model nor a depth map. Check it with meshy_get_task_status (response_format json)." }]
+    };
+  }
+
+  // save_to names the model (or, for a depth-map-only task, the depth map); else the project folder.
+  const stage = inferStage(TaskType.RELIEF, task.type);
+  let projectDir: string | undefined;
+  let modelPath: string | undefined;
+  let depthPath: string;
+  if (params.save_to) {
+    const base = path.join(path.dirname(params.save_to), path.basename(params.save_to, path.extname(params.save_to)));
+    if (depthOnly) {
+      depthPath = path.extname(params.save_to).toLowerCase() === ".png" ? params.save_to : `${base}_depth.png`;
+    } else {
+      modelPath = params.save_to;
+      depthPath = `${base}_depth.png`;
+    }
+  } else {
+    projectDir = resolveProjectDir(params.task_id, TaskType.RELIEF, task.prompt, params.parent_task_id, task.created_at);
+    if (!depthOnly) modelPath = getFilePath(projectDir, stage, fmt);
+    depthPath = path.join(projectDir, `${stage}_depth.png`);
+  }
+
+  const saved: string[] = [];
+  const notSaved: { file: string; url: string; error: string }[] = [];
+  const save = async (file: string, url: string, target: string): Promise<number | undefined> => {
+    try {
+      const size = await downloadFileToLocal(url, target);
+      saved.push(target);
+      return size;
+    } catch (error) {
+      notSaved.push({ file, url, error: error instanceof Error ? error.message : String(error) });
+      return undefined;
+    }
+  };
+
+  let modelSize: number | undefined;
+  let mtlPath: string | undefined;
+  let texturePath: string | undefined;
+  if (modelUrl && modelPath) {
+    modelSize = await save(fmt, modelUrl, modelPath);
+    if (modelSize === undefined) {
+      return {
+        content: [{
+          type: "text",
+          text: `# Download Failed — URLs Provided Instead
+
+**Error**: ${notSaved[0].error}
+
+**Download URL** (use manually):
+${modelUrl}${depthUrl ? `\n\n**Depth Map URL**:\n${depthUrl}` : ""}
+
+${expiryNote(task, false)}`
+        }],
+        structuredContent: { download_url: modelUrl, format: fmt, download_error: notSaved[0].error, depth_map_url: depthUrl, expires_at: expiresAt(task) }
+      };
+    }
+    const dir = path.dirname(modelPath);
+    const stem = path.basename(modelPath, path.extname(modelPath));
+    // An OBJ names its MTL (mtllib) and the MTL its texture (map_Kd): keep those names so the set opens together.
+    if (fmt === "obj" && modelUrls.mtl) {
+      const target = path.join(dir, referencedFile(modelPath, "mtllib") ?? `${stem}.mtl`);
+      if (await save("mtl", modelUrls.mtl, target) !== undefined) mtlPath = target;
+    }
+    const textureUrl = params.include_textures && RELIEF_COLOR_FORMATS.includes(fmt)
+      ? firstTextureSet(task.texture_urls)?.base_color
+      : undefined;
+    if (textureUrl) {
+      const named = mtlPath ? referencedFile(mtlPath, "map_Kd") : undefined;
+      const target = named
+        ? path.join(dir, named)
+        : projectDir
+          ? getTextureFilePath(projectDir, stage, "base_color", textureUrl)
+          : path.join(dir, `${stem}_base_color${textureUrl.split("?")[0].toLowerCase().includes(".png") ? ".png" : ".jpg"}`);
+      if (await save("base_color", textureUrl, target) !== undefined) texturePath = target;
+    }
+  }
+
+  const depthSize = depthUrl ? await save("depth_map", depthUrl, depthPath) : undefined;
+  if (depthOnly && depthSize === undefined) {
+    return {
+      content: [{
+        type: "text",
+        text: `# Download Failed — URL Provided Instead
+
+**Error**: ${notSaved[0].error}
+
+**Depth Map URL** (use manually):
+${depthUrl}
+
+${expiryNote(task, false)}`
+      }],
+      structuredContent: { depth_map_only: true, depth_map_url: depthUrl, download_error: notSaved[0].error, expires_at: expiresAt(task) }
+    };
+  }
+
+  if (projectDir) {
+    if (task.thumbnail_url) saveThumbnail(projectDir, task.thumbnail_url).catch(() => {});
+    recordTask(projectDir, {
+      task_id: params.task_id,
+      task_type: TaskType.RELIEF,
+      stage,
+      prompt: task.prompt,
+      status: task.status,
+      files: saved.map(p => path.basename(p)),
+      created_at: new Date().toISOString()
+    });
+  }
+
+  const depthSaved = depthSize !== undefined ? depthPath : undefined;
+  const notSavedText = notSaved.length > 0
+    ? `\n**Not saved** (download these URLs directly):\n${notSaved.map(n => `- ${n.file}: ${n.url} (${n.error})`).join("\n")}`
+    : "";
+  const folderText = projectDir ? `\n**Project Folder**: ${projectDir}` : "";
+
+  if (depthOnly) {
+    return {
+      content: [{
+        type: "text",
+        text: `# Relief Depth Map Downloaded
+
+**Task ID**: ${params.task_id}
+**Depth Map**: ${depthPath} (16-bit grayscale PNG of relative heights, ${(depthSize! / (1024 * 1024)).toFixed(2)} MB)${folderText}
+
+This task was created with should_generate_model false: it has a depth map and no model${params.format ? `, so format "${params.format}" was not used` : ""}.
+
+${expiryNote(task)}`
+      }],
+      structuredContent: {
+        depth_map_only: true,
+        depth_map_url: depthUrl,
+        depth_map_path: depthPath,
+        local_path: depthPath,
+        project_dir: projectDir,
+        file_size_bytes: depthSize,
+        expires_at: expiresAt(task)
+      }
+    };
+  }
+
+  const lines = [
+    "# Relief Downloaded",
+    "",
+    `**Task ID**: ${params.task_id}`,
+    `**Format**: ${fmt.toUpperCase()}`,
+    `**Local File**: ${modelPath}`,
+    `**File Size**: ${(modelSize! / (1024 * 1024)).toFixed(2)} MB`
+  ];
+  if (mtlPath) lines.push(`**Material (MTL)**: ${mtlPath}`);
+  if (texturePath) lines.push(`**Texture**: ${texturePath}`);
+  if (depthSaved) lines.push(`**Depth Map**: ${depthSaved} (16-bit grayscale PNG of relative heights)`);
+  let text = lines.join("\n") + folderText + notSavedText;
+  if (params.print_ready) {
+    text += "\n\nprint_ready was not applied: a relief already has its real size. Its STL (millimeters, Z up) and 3MF open at that size.";
+  }
+  text += `\n\n${expiryNote(task)}`;
+
+  return {
+    content: [{ type: "text", text }],
+    structuredContent: {
+      download_url: modelUrl,
+      local_path: modelPath,
+      project_dir: projectDir,
+      file_size_bytes: modelSize,
+      format: fmt,
+      mtl_path: mtlPath,
+      texture_paths: texturePath ? [texturePath] : undefined,
+      depth_map_url: depthUrl,
+      depth_map_path: depthSaved,
+      not_saved: notSaved.length > 0 ? notSaved : undefined,
+      expires_at: expiresAt(task)
     }
   };
 }
@@ -617,7 +858,7 @@ ${stillRunning}`
     "meshy_list_tasks",
     {
       title: "List Generation Tasks",
-      description: `List tasks of any status, newest first by default, merged across the types queried (one request per type). Default: text-to-3d, image-to-3d, multi-image-to-3d, text-to-image and image-to-image; pass task_type / task_types for printing, rigging, animation, motion, post-processing or Creative Lab tasks. With a task_id in hand, use meshy_get_task_status instead. Tasks created through the API do not appear in the Meshy web app.
+      description: `List tasks of any status, newest first by default, merged across the types queried (one request per type). Default: text-to-3d, image-to-3d, multi-image-to-3d, text-to-image and image-to-image; pass task_type / task_types for printing, rigging, animation, motion, post-processing, relief or Creative Lab tasks. With a task_id in hand, use meshy_get_task_status instead. Tasks created through the API do not appear in the Meshy web app.
 
 status and phase filter the fetched tasks, so a page can be shorter than limit; continue with next_offset while has_more. Types whose request failed are listed in failed_types. For finished 3D models only, meshy_list_models is cheaper.`,
       inputSchema: ListTasksInputSchema,
@@ -658,7 +899,7 @@ status and phase filter the fetched tasks, so a page can be shorter than limit; 
           queried_types: taskTypesToQuery,
           note: requested.length > 0
             ? "Only the queried_types were searched."
-            : "Default types only: printing, rigging, animation, motion, post-processing and Creative Lab tasks are not included; pass task_types to list them.",
+            : "Default types only: printing, rigging, animation, motion, post-processing, relief and Creative Lab tasks are not included; pass task_types to list them.",
           tasks: allTasks,
           has_more: listed.hasMore,
           next_offset: listed.hasMore ? params.offset + allTasks.length : undefined,
@@ -844,6 +1085,7 @@ Returns { success, task_id, task_type, previous_status, message }.`,
 
   - 3D tasks: ONE model format — ask the user which first (GLB viewing, OBJ white-model printing, 3MF multicolor printing, FBX game engines, USDZ AR, BLEND Blender); never download all. A format exists only if it was generated: 3mf needs target_formats ["3mf"] at creation, meshy_convert or meshy_process_multicolor.
   - Creative Lab: omit format to save every part.
+  - Relief: the model in format (only the target_formats it was created with; OBJ with its MTL and texture) plus its depth map PNG. A depth-map-only task saves the depth map.
   - Images and text-to-motion clips save their own files and ignore format.
   - Rigging and animation tasks are not saved: they return their file URLs.
 If a download fails, its URL is returned instead.
@@ -990,6 +1232,10 @@ ${expiryNote(task)}`
             }],
             structuredContent: { download_url: motionUrl, local_path: target, project_dir: projectDir, file_size_bytes: size, format: ext.slice(1), expires_at: expiresAt(task) }
           };
+        }
+
+        if (taskType === TaskType.RELIEF) {
+          return await downloadRelief(task, params);
         }
 
         // Creative Lab products can expose bespoke multi-part model_urls
