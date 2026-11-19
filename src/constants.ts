@@ -125,6 +125,8 @@ export enum TaskType {
   PRINT_REPAIR = "print-repair",
   PRINT_SPLIT = "print-split",
   TEXT_TO_MOTION = "text-to-motion",
+  // Photo → bas-relief model and depth map. Its GET and list routes return relief tasks only.
+  RELIEF = "relief",
   // Creative Lab — each product carries its own /openapi/creative-lab/<product>/v1 line,
   // and GET/list/delete/stream are STAGE-SPECIFIC: .../v1/prototype/:id and .../v1/build/:id
   // (there is no .../v1/:id). So we need one task type per (product, stage) for correct routing.
@@ -246,6 +248,9 @@ export const TEXT_TO_MOTION_CREDITS = { prime: 10, swift: 3 } as const;
 export const PRINTER_BRANDS = [
   "bambu", "anycubic", "creality", "elegoo", "flashforge", "prusa", "qidi", "snapmaker", "ankermake"
 ] as const;
+
+// Relief credit cost per task, depth-map-only tasks included
+export const RELIEF_CREDITS = 20;
 
 // Post-processing credit costs
 export const CONVERT_CREDITS = 1;

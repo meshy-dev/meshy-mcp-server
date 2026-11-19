@@ -310,6 +310,8 @@ export interface Task {
   alpha_thumbnail_url?: string;
   // Image-generation tasks (text-to-image / image-to-image) return their result here, not in model_urls.
   image_urls?: string[];
+  // Relief tasks: the 16-bit grayscale depth map (PNG); empty until the task succeeds.
+  depth_map_url?: string;
   texture_urls?: TextureUrlsObject[] | TextureUrlsObject;
   video_url?: string;
   // Credits consumed by this task (present on most GET responses; 0 for FAILED tasks)
