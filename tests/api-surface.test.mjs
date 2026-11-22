@@ -804,13 +804,17 @@ test("relief download saves the model, its depth map and, for OBJ, a material an
       [["obj", `${base}/unavailable.obj`], ["mtl", `${base}/model.mtl`], ["base_color", `${base}/texture_0.png`]]);
     assert.deepEqual(fs.readdirSync(path.join(dir, "failed")), ["plaque_depth.png"]);
 
-    // The connection drops partway: no partial file is left, and the URL is handed out instead.
+    // The connection drops partway: no partial file is left, a file already at save_to keeps its
+    // content, and the URL is handed out instead.
     const cutting = createHarness(registerTaskTools, {
       "/openapi/v1/relief/c": () => ({ ...relief(), id: "c", model_urls: { stl: `${base}/cut.stl` } }),
     });
+    fs.mkdirSync(path.join(dir, "cut"));
+    fs.writeFileSync(path.join(dir, "cut", "plaque.stl"), "the user's own file");
     const cut = await cutting.run("meshy_download_model", { task_id: "c", task_type: "relief", format: "stl", save_to: path.join(dir, "cut", "plaque.stl") });
     assert.equal(cut.structuredContent.download_url, `${base}/cut.stl`, JSON.stringify(cut));
-    assert.deepEqual(fs.readdirSync(path.join(dir, "cut")), ["plaque_depth.png"]);
+    assert.deepEqual(fs.readdirSync(path.join(dir, "cut")).sort(), ["plaque.stl", "plaque_depth.png"]);
+    assert.equal(read(path.join(dir, "cut", "plaque.stl")), "the user's own file");
 
     // A format the task was not made in: refused, naming the formats it has.
     const fbx = await h.run("meshy_download_model", { task_id: "r", task_type: "relief", format: "fbx", save_to: path.join(dir, "fbx", "plaque.fbx") });

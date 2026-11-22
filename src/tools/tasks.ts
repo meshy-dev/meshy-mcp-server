@@ -111,8 +111,9 @@ function fixObjForPrinting(filePath: string, targetHeightMm: number = 75): void 
 }
 
 /**
- * Download url to saveTo, through transform when given, and return the saved size. A transfer that
- * breaks off rejects and removes the partial file, so a caller can fall back to the URL.
+ * Download url to saveTo, through transform when given, and return the saved size. The file is
+ * written beside saveTo and moved onto it once complete, so a transfer that breaks off rejects,
+ * leaves whatever saveTo held before, and lets the caller fall back to the URL.
  */
 async function downloadFileToLocal(url: string, saveTo: string, transform?: Transform): Promise<number> {
   // Ensure directory exists
@@ -126,14 +127,16 @@ async function downloadFileToLocal(url: string, saveTo: string, transform?: Tran
     timeout: 120000 // 120s timeout
   });
 
+  const partial = `${saveTo}.${process.pid}.${Date.now()}.part`;
   try {
     if (transform) {
-      await pipeline(response.data, transform, fs.createWriteStream(saveTo));
+      await pipeline(response.data, transform, fs.createWriteStream(partial));
     } else {
-      await pipeline(response.data, fs.createWriteStream(saveTo));
+      await pipeline(response.data, fs.createWriteStream(partial));
     }
+    fs.renameSync(partial, saveTo);
   } catch (error) {
-    fs.rmSync(saveTo, { force: true });
+    fs.rmSync(partial, { force: true });
     throw error;
   }
   return fs.statSync(saveTo).size;
