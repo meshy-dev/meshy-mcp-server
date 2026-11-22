@@ -705,6 +705,9 @@ test("relief tasks are read, listed and deleted on the relief route", async () =
     assert.equal(out.model_urls.glb, "https://example.invalid/model.glb");
     assert.equal(TaskStatusOutputSchema.strict().safeParse(out).success, true, JSON.stringify(out));
     assert.match(result.content[0].text, /Depth [Mm]ap/);
+    // A colored relief's texture comes back whatever formats it made.
+    assert.deepEqual(out.texture_urls, [{ base_color: "https://example.invalid/texture_0.png" }]);
+    assert.match(result.content[0].text, /texture_0\.png/);
 
     const only = await h.run("meshy_get_task_status", { task_id: "d", task_type: "relief", wait });
     assert.equal(only.structuredContent.model_urls, undefined);
@@ -724,7 +727,7 @@ test("relief tasks are read, listed and deleted on the relief route", async () =
   assert.match(deleted.structuredContent.message, /refunded/);
 });
 
-test("relief download saves the model, its depth map and, for OBJ, the material and texture it names", async () => {
+test("relief download saves the model, its depth map and, for OBJ, a material and texture named after it", async () => {
   const { createServer } = await import("node:http");
   const fs = await import("node:fs");
   const os = await import("node:os");
@@ -733,7 +736,19 @@ test("relief download saves the model, its depth map and, for OBJ, the material 
     "/model.obj": "mtllib model.mtl\nusemtl m\nv 0 0 0\n",
     "/model.mtl": "newmtl m\nmap_Kd texture_0.png\n",
   };
-  const server = createServer((req, res) => res.end(files[req.url] ?? req.url));
+  const server = createServer((req, res) => {
+    if (req.url === "/unavailable.obj") {
+      res.statusCode = 503;
+      return res.end("unavailable");
+    }
+    if (req.url === "/cut.stl") {
+      // The connection drops partway through the body.
+      res.writeHead(200, { "content-length": "1000" });
+      res.write("partial");
+      return setTimeout(() => res.destroy(), 10);
+    }
+    res.end(files[req.url] ?? req.url);
+  });
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   const base = `http://127.0.0.1:${server.address().port}`;
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "meshy-relief-dl-"));
@@ -757,18 +772,45 @@ test("relief download saves the model, its depth map and, for OBJ, the material 
     assert.equal(glb.structuredContent.depth_map_path, path.join(dir, "plaque_depth.png"));
     assert.equal(read(path.join(dir, "plaque_depth.png")), "/depth.png");
 
-    // OBJ: the MTL and texture keep the names the OBJ and MTL refer to.
+    // OBJ: the MTL and texture are named after the model, and the OBJ and MTL point at them.
     const obj = await h.run("meshy_download_model", { task_id: "r", task_type: "relief", format: "obj", save_to: path.join(dir, "obj", "plaque.obj") });
     assert.notEqual(obj.isError, true, JSON.stringify(obj));
-    assert.equal(obj.structuredContent.mtl_path, path.join(dir, "obj", "model.mtl"));
-    assert.equal(read(path.join(dir, "obj", "model.mtl")), files["/model.mtl"]);
-    assert.deepEqual(obj.structuredContent.texture_paths, [path.join(dir, "obj", "texture_0.png")]);
+    assert.equal(obj.structuredContent.mtl_path, path.join(dir, "obj", "plaque.mtl"));
+    assert.equal(read(path.join(dir, "obj", "plaque.obj")), "mtllib plaque.mtl\nusemtl m\nv 0 0 0\n");
+    assert.equal(read(path.join(dir, "obj", "plaque.mtl")), "newmtl m\nmap_Kd plaque_base_color.png\n");
+    assert.deepEqual(obj.structuredContent.texture_paths, [path.join(dir, "obj", "plaque_base_color.png")]);
+    assert.equal(read(path.join(dir, "obj", "plaque_base_color.png")), "/texture_0.png");
     assert.equal(read(path.join(dir, "obj", "plaque_depth.png")), "/depth.png");
+    // A second OBJ saved into the same folder leaves the first one's material alone.
+    const other = await h.run("meshy_download_model", { task_id: "r", task_type: "relief", format: "obj", save_to: path.join(dir, "obj", "other.obj") });
+    assert.notEqual(other.isError, true, JSON.stringify(other));
+    assert.equal(read(path.join(dir, "obj", "other.obj")), "mtllib other.mtl\nusemtl m\nv 0 0 0\n");
+    assert.equal(read(path.join(dir, "obj", "plaque.mtl")), "newmtl m\nmap_Kd plaque_base_color.png\n");
 
     // STL stays white: no texture beside it.
     const stl = await h.run("meshy_download_model", { task_id: "r", task_type: "relief", format: "stl", save_to: path.join(dir, "stl", "plaque.stl") });
     assert.equal(stl.structuredContent.texture_paths, undefined, JSON.stringify(stl));
     assert.deepEqual(fs.readdirSync(path.join(dir, "stl")).sort(), ["plaque.stl", "plaque_depth.png"]);
+
+    // The model's download fails: the depth map is still saved, and the reply hands out the URLs
+    // of the model and of the companions it would have saved.
+    const failing = createHarness(registerTaskTools, {
+      "/openapi/v1/relief/f": () => ({ ...relief(), id: "f", model_urls: { obj: `${base}/unavailable.obj`, mtl: `${base}/model.mtl` } }),
+    });
+    const failed = await failing.run("meshy_download_model", { task_id: "f", task_type: "relief", format: "obj", save_to: path.join(dir, "failed", "plaque.obj") });
+    assert.equal(failed.structuredContent.download_url, `${base}/unavailable.obj`, JSON.stringify(failed));
+    assert.equal(failed.structuredContent.depth_map_path, path.join(dir, "failed", "plaque_depth.png"));
+    assert.deepEqual(failed.structuredContent.not_saved.map((n) => [n.file, n.url]),
+      [["obj", `${base}/unavailable.obj`], ["mtl", `${base}/model.mtl`], ["base_color", `${base}/texture_0.png`]]);
+    assert.deepEqual(fs.readdirSync(path.join(dir, "failed")), ["plaque_depth.png"]);
+
+    // The connection drops partway: no partial file is left, and the URL is handed out instead.
+    const cutting = createHarness(registerTaskTools, {
+      "/openapi/v1/relief/c": () => ({ ...relief(), id: "c", model_urls: { stl: `${base}/cut.stl` } }),
+    });
+    const cut = await cutting.run("meshy_download_model", { task_id: "c", task_type: "relief", format: "stl", save_to: path.join(dir, "cut", "plaque.stl") });
+    assert.equal(cut.structuredContent.download_url, `${base}/cut.stl`, JSON.stringify(cut));
+    assert.deepEqual(fs.readdirSync(path.join(dir, "cut")), ["plaque_depth.png"]);
 
     // A format the task was not made in: refused, naming the formats it has.
     const fbx = await h.run("meshy_download_model", { task_id: "r", task_type: "relief", format: "fbx", save_to: path.join(dir, "fbx", "plaque.fbx") });

@@ -47,6 +47,7 @@ export const TaskStatusOutputSchema = z.object({
   thumbnail_url: z.string().optional(),
   alpha_thumbnail_url: z.string().optional(),
   depth_map_url: z.string().optional().describe("Relief: the 16-bit grayscale depth map (PNG, relative heights)"),
+  texture_urls: z.union([z.array(z.record(z.string())), z.record(z.string())]).optional().describe("Relief with color_mapping: the texture ({ base_color }), whatever formats the task made"),
   printability: z.record(z.unknown()).optional().describe("print-analyze result: status, issue counts, metrics, thin walls"),
   part_count: z.number().optional().describe("Auto Split: number of parts"),
   prompt_ignored: z.boolean().optional().describe("Auto Split: the prompt was unreadable, so the cuts were chosen automatically"),

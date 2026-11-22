@@ -6,6 +6,8 @@ import { z } from "zod";
 import axios from "axios";
 import * as fs from "fs";
 import * as path from "path";
+import { Transform } from "stream";
+import { pipeline } from "stream/promises";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { MeshyClient, getTaskWithAutoInference, pollTask, listAcrossTypes } from "../services/meshy-client.js";
@@ -108,7 +110,11 @@ function fixObjForPrinting(filePath: string, targetHeightMm: number = 75): void 
   console.error(`OBJ fixed for printing: Y-up→Z-up, ${targetHeightMm}mm, centered, bottom at Z=0`);
 }
 
-async function downloadFileToLocal(url: string, saveTo: string): Promise<number> {
+/**
+ * Download url to saveTo, through transform when given, and return the saved size. A transfer that
+ * breaks off rejects and removes the partial file, so a caller can fall back to the URL.
+ */
+async function downloadFileToLocal(url: string, saveTo: string, transform?: Transform): Promise<number> {
   // Ensure directory exists
   const dir = path.dirname(saveTo);
   if (!fs.existsSync(dir)) {
@@ -120,16 +126,17 @@ async function downloadFileToLocal(url: string, saveTo: string): Promise<number>
     timeout: 120000 // 120s timeout
   });
 
-  const writer = fs.createWriteStream(saveTo);
-  response.data.pipe(writer);
-
-  return new Promise((resolve, reject) => {
-    writer.on("finish", () => {
-      const stats = fs.statSync(saveTo);
-      resolve(stats.size);
-    });
-    writer.on("error", reject);
-  });
+  try {
+    if (transform) {
+      await pipeline(response.data, transform, fs.createWriteStream(saveTo));
+    } else {
+      await pipeline(response.data, fs.createWriteStream(saveTo));
+    }
+  } catch (error) {
+    fs.rmSync(saveTo, { force: true });
+    throw error;
+  }
+  return fs.statSync(saveTo).size;
 }
 
 /** The first texture set: texture_urls is an array of sets (text-to-3d, relief) or a single set. */
@@ -186,9 +193,12 @@ function formatTask(task: Task, format: ResponseFormat): string {
     if (task.status === TaskStatus.SUCCEEDED && task.model_urls) {
       lines.push("## Result");
 
-      const formats = Object.keys(task.model_urls).filter(k => task.model_urls![k as keyof typeof task.model_urls]);
+      // The MTL comes with the OBJ; it is not a format of its own.
+      const formats = Object.keys(task.model_urls).filter(k => k !== "mtl" && task.model_urls![k as keyof typeof task.model_urls]);
       lines.push(`- **Available Formats**: ${formats.length > 0 ? formats.join(', ').toUpperCase() : "none"}`);
       if (task.depth_map_url) lines.push(`- **Depth Map**: ${task.depth_map_url}`);
+      const reliefTexture = task.type === TaskType.RELIEF ? firstTextureSet(task.texture_urls)?.base_color : undefined;
+      if (reliefTexture) lines.push(`- **Texture (base color)**: ${reliefTexture}`);
       if (task.thumbnail_url) lines.push(`- **Thumbnail**: ${task.thumbnail_url}`);
       if (task.alpha_thumbnail_url) lines.push(`- **Alpha Thumbnail**: ${task.alpha_thumbnail_url}`);
       if (typeof task.consumed_credits === "number") lines.push(`- **Credits Consumed**: ${task.consumed_credits}`);
@@ -266,6 +276,8 @@ function taskExtras(task: Task) {
     thumbnail_url: task.thumbnail_url || undefined,
     alpha_thumbnail_url: task.alpha_thumbnail_url || undefined,
     depth_map_url: task.depth_map_url || undefined,
+    // A colored relief returns its texture whatever formats it made, STL / 3MF only included.
+    texture_urls: task.type === TaskType.RELIEF ? task.texture_urls ?? undefined : undefined,
     printability: task.printability ?? undefined,
     part_count: task.part_count ?? undefined,
     prompt_ignored: task.prompt_ignored ?? undefined,
@@ -357,7 +369,8 @@ function buildWaitSuccessResponse(
     lines.push("## Relief Result");
     if (!Object.values(task.model_urls ?? {}).some(Boolean)) lines.push("- Depth map only: no model (should_generate_model false)");
     if (task.depth_map_url) lines.push("- Depth map: 16-bit grayscale PNG of relative heights, usable as a laser / CNC height map");
-    if (firstTextureSet(task.texture_urls)?.base_color) lines.push("- Color: GLB, OBJ, FBX and USDZ carry the photo's color; STL and 3MF are white");
+    const texture = firstTextureSet(task.texture_urls)?.base_color;
+    if (texture) lines.push(`- Color: GLB, OBJ, FBX and USDZ carry the photo's color; STL and 3MF are white. Texture (base color): ${texture}`);
     lines.push("");
   }
 
@@ -439,25 +452,36 @@ function buildWaitSuccessResponse(
 }
 
 /**
- * The file a downloaded OBJ or MTL names on its first `keyword` line (mtllib, map_Kd), read from
- * the file's start. Only the base name: the named file is saved next to the one that names it.
+ * A stream that points an OBJ's first `mtllib` line at mtlName and passes everything else through
+ * as it is. Only whole lines in the first 64 KiB are looked at, where the line is; an OBJ without
+ * one there is written unchanged.
  */
-function referencedFile(filePath: string, keyword: string): string | undefined {
-  try {
-    const fd = fs.openSync(filePath, "r");
-    try {
-      const head = Buffer.alloc(64 * 1024);
-      const read = fs.readSync(fd, head, 0, head.length, 0);
-      const line = head.toString("utf-8", 0, read).match(new RegExp(`^\\s*${keyword}\\s+(.+?)\\s*$`, "m"));
-      // The file name is the last token (map_Kd may put options such as -s 1 1 1 before it).
-      const name = line ? path.basename(line[1].split(/\s+/).pop() ?? "") : "";
-      return name && name !== "." && name !== ".." ? name : undefined;
-    } finally {
-      fs.closeSync(fd);
+function pointObjAtMtl(mtlName: string): Transform {
+  let head = Buffer.alloc(0);
+  let done = false;
+  return new Transform({
+    transform(chunk: Buffer, _encoding, callback) {
+      if (done) return callback(null, chunk);
+      head = Buffer.concat([head, chunk]);
+      const text = head.toString("latin1");
+      const complete = text.slice(0, text.lastIndexOf("\n") + 1);
+      const found = /^([ \t]*mtllib[ \t]+)[^\r\n]*/m.exec(complete);
+      if (!found && head.length < 64 * 1024) return callback();
+      done = true;
+      const out = found ? text.replace(/^([ \t]*mtllib[ \t]+)[^\r\n]*/m, `$1${mtlName}`) : text;
+      head = Buffer.alloc(0);
+      callback(null, Buffer.from(out, "latin1"));
+    },
+    flush(callback) {
+      callback(null, done ? undefined : head);
     }
-  } catch {
-    return undefined;
-  }
+  });
+}
+
+/** Point every `map_Kd` line of a saved MTL at textureName (its last token, after any options). */
+function pointMtlAtTexture(mtlPath: string, textureName: string): void {
+  const mtl = fs.readFileSync(mtlPath, "utf-8");
+  fs.writeFileSync(mtlPath, mtl.replace(/^([ \t]*map_Kd[ \t]+(?:\S+[ \t]+)*?)\S+[ \t]*$/gm, `$1${textureName}`));
 }
 
 /**
@@ -510,9 +534,9 @@ async function downloadRelief(task: GetTaskResponse, params: z.infer<typeof Down
 
   const saved: string[] = [];
   const notSaved: { file: string; url: string; error: string }[] = [];
-  const save = async (file: string, url: string, target: string): Promise<number | undefined> => {
+  const save = async (file: string, url: string, target: string, transform?: Transform): Promise<number | undefined> => {
     try {
-      const size = await downloadFileToLocal(url, target);
+      const size = await downloadFileToLocal(url, target, transform);
       saved.push(target);
       return size;
     } catch (error) {
@@ -525,41 +549,31 @@ async function downloadRelief(task: GetTaskResponse, params: z.infer<typeof Down
   let mtlPath: string | undefined;
   let texturePath: string | undefined;
   if (modelUrl && modelPath) {
-    modelSize = await save(fmt, modelUrl, modelPath);
-    if (modelSize === undefined) {
-      return {
-        content: [{
-          type: "text",
-          text: `# Download Failed — URLs Provided Instead
-
-**Error**: ${notSaved[0].error}
-
-**Download URL** (use manually):
-${modelUrl}${depthUrl ? `\n\n**Depth Map URL**:\n${depthUrl}` : ""}
-
-${expiryNote(task, false)}`
-        }],
-        structuredContent: { download_url: modelUrl, format: fmt, download_error: notSaved[0].error, depth_map_url: depthUrl, expires_at: expiresAt(task) }
-      };
-    }
     const dir = path.dirname(modelPath);
     const stem = path.basename(modelPath, path.extname(modelPath));
-    // An OBJ names its MTL (mtllib) and the MTL its texture (map_Kd): keep those names so the set opens together.
-    if (fmt === "obj" && modelUrls.mtl) {
-      const target = path.join(dir, referencedFile(modelPath, "mtllib") ?? `${stem}.mtl`);
-      if (await save("mtl", modelUrls.mtl, target) !== undefined) mtlPath = target;
-    }
+    // The MTL and the texture are named after the model, and the OBJ and MTL are pointed at those
+    // names, so two OBJ downloads into one folder keep their own materials.
+    const mtlUrl = fmt === "obj" ? modelUrls.mtl : undefined;
+    const mtlTarget = path.join(dir, `${stem}.mtl`);
     const textureUrl = params.include_textures && RELIEF_COLOR_FORMATS.includes(fmt)
       ? firstTextureSet(task.texture_urls)?.base_color
       : undefined;
-    if (textureUrl) {
-      const named = mtlPath ? referencedFile(mtlPath, "map_Kd") : undefined;
-      const target = named
-        ? path.join(dir, named)
-        : projectDir
-          ? getTextureFilePath(projectDir, stage, "base_color", textureUrl)
-          : path.join(dir, `${stem}_base_color${textureUrl.split("?")[0].toLowerCase().includes(".png") ? ".png" : ".jpg"}`);
-      if (await save("base_color", textureUrl, target) !== undefined) texturePath = target;
+    const textureTarget = !textureUrl
+      ? undefined
+      : projectDir
+        ? getTextureFilePath(projectDir, stage, "base_color", textureUrl)
+        : path.join(dir, `${stem}_base_color${textureUrl.split("?")[0].toLowerCase().includes(".png") ? ".png" : ".jpg"}`);
+    modelSize = await save(fmt, modelUrl, modelPath, mtlUrl ? pointObjAtMtl(path.basename(mtlTarget)) : undefined);
+    if (modelSize === undefined) {
+      // Without the model its companions name nothing: hand out their URLs with it.
+      if (mtlUrl) notSaved.push({ file: "mtl", url: mtlUrl, error: "not downloaded: the model was not saved" });
+      if (textureUrl) notSaved.push({ file: "base_color", url: textureUrl, error: "not downloaded: the model was not saved" });
+    } else {
+      if (mtlUrl && await save("mtl", mtlUrl, mtlTarget) !== undefined) mtlPath = mtlTarget;
+      if (textureUrl && textureTarget && await save("base_color", textureUrl, textureTarget) !== undefined) {
+        texturePath = textureTarget;
+        if (mtlPath) pointMtlAtTexture(mtlPath, path.basename(textureTarget));
+      }
     }
   }
 
@@ -620,6 +634,33 @@ ${expiryNote(task)}`
         local_path: depthPath,
         project_dir: projectDir,
         file_size_bytes: depthSize,
+        expires_at: expiresAt(task)
+      }
+    };
+  }
+
+  if (modelSize === undefined) {
+    const modelError = notSaved.find(n => n.file === fmt)?.error ?? "download failed";
+    return {
+      content: [{
+        type: "text",
+        text: `# Download Failed — URLs Provided Instead
+
+**Error**: ${modelError}
+
+**Download URL** (use manually):
+${modelUrl}${depthSaved ? `\n\n**Depth Map**: ${depthSaved} (saved)` : ""}${folderText}${notSavedText}
+
+${expiryNote(task, false)}`
+      }],
+      structuredContent: {
+        download_url: modelUrl,
+        format: fmt,
+        download_error: modelError,
+        depth_map_url: depthUrl,
+        depth_map_path: depthSaved,
+        project_dir: projectDir,
+        not_saved: notSaved,
         expires_at: expiresAt(task)
       }
     };
