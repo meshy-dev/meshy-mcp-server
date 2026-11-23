@@ -110,9 +110,19 @@ function fixObjForPrinting(filePath: string, targetHeightMm: number = 75): void 
   console.error(`OBJ fixed for printing: Y-up→Z-up, ${targetHeightMm}mm, centered, bottom at Z=0`);
 }
 
+/** Whether anything, a dangling symlink included, is at p. */
+function pathTaken(p: string): boolean {
+  try {
+    fs.lstatSync(p);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Download url to saveTo and return the saved size. Each transfer is staged in a folder of its own
- * and published only once complete: moved into place when nothing is at saveTo yet, so a new file
+ * and published only once complete: moved into place when nothing is at saveTo then, so a new file
  * takes its size on the disk once; written onto an existing saveTo the way it was always written
  * (through a symlink, refused on a read-only file, keeping its mode). The staging folder sits
  * beside saveTo, or, for an existing file in a folder that takes no new entries, in the system's
@@ -125,18 +135,12 @@ async function downloadFileToLocal(url: string, saveTo: string): Promise<number>
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
-  let exists = true;
-  try {
-    fs.lstatSync(saveTo);
-  } catch {
-    exists = false;
-  }
 
   let staging: string;
   try {
     staging = fs.mkdtempSync(path.join(dir, ".meshy-download-"));
   } catch (error) {
-    if (!exists) throw error;
+    if (!pathTaken(saveTo)) throw error;
     staging = fs.mkdtempSync(path.join(os.tmpdir(), "meshy-download-"));
   }
   try {
@@ -146,7 +150,9 @@ async function downloadFileToLocal(url: string, saveTo: string): Promise<number>
     });
     const staged = path.join(staging, "download");
     await pipeline(response.data, fs.createWriteStream(staged));
-    if (exists) {
+    // Looked at now, not before the transfer: a file that appeared at saveTo meanwhile is written
+    // as an existing one, never replaced.
+    if (pathTaken(saveTo)) {
       await pipeline(fs.createReadStream(staged), fs.createWriteStream(saveTo));
     } else {
       fs.renameSync(staged, saveTo);

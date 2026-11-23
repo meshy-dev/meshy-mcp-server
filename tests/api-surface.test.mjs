@@ -752,7 +752,14 @@ test("relief download saves the model, its depth map and, for OBJ, a folder hold
     "/model.mtl": "newmtl m\nmap_Kd texture_0.png\n",
   };
   let slowRequests = 0;
+  let appear;
   const server = createServer((req, res) => {
+    if (req.url === "/appear.stl") {
+      // Sends half its body, then waits until the test has put a file at the target.
+      res.write("/appear");
+      appear.arrived();
+      return appear.released.then(() => res.end(".stl"));
+    }
     if (req.url === "/unavailable.obj") {
       res.statusCode = 503;
       return res.end("unavailable");
@@ -876,6 +883,26 @@ test("relief download saves the model, its depth map and, for OBJ, a folder hold
       const lockedRun = await h.run("meshy_download_model", { task_id: "r", task_type: "relief", format: "stl", save_to: locked });
       assert.equal(lockedRun.structuredContent.download_url, `${base}/model.stl`, JSON.stringify(lockedRun));
       assert.equal(read(locked), "keep");
+
+      // A file that appears at save_to while the transfer runs is written as an existing one, never
+      // replaced: this one is read-only, so it is left as it was and the URL handed out.
+      let release;
+      const arrived = new Promise((resolve) => {
+        appear = { arrived: resolve, released: new Promise((r) => { release = r; }) };
+      });
+      const appearing = createHarness(registerTaskTools, {
+        "/openapi/v1/relief/a": () => ({ ...relief(), id: "a", model_urls: { stl: `${base}/appear.stl` } }),
+      });
+      const late = path.join(dir, "late", "plaque.stl");
+      const pending = appearing.run("meshy_download_model", { task_id: "a", task_type: "relief", format: "stl", save_to: late });
+      await arrived;
+      fs.writeFileSync(late, "keep");
+      fs.chmodSync(late, 0o444);
+      release();
+      const lateRun = await pending;
+      assert.equal(lateRun.structuredContent.download_url, `${base}/appear.stl`, JSON.stringify(lateRun));
+      assert.equal(read(late), "keep");
+      assert.deepEqual(fs.readdirSync(path.join(dir, "late")).sort(), ["plaque.stl", "plaque_depth.png"]);
     }
     const slow = createHarness(registerTaskTools, {
       "/openapi/v1/relief/w": () => ({ ...relief(), id: "w", model_urls: { stl: `${base}/slow.stl` } }),
