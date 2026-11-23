@@ -873,6 +873,24 @@ test("relief download saves the model, its depth map and, for OBJ, a folder hold
       assert.deepEqual(fs.readdirSync(folder).filter((f) => f.startsWith(".meshy-download-")), [], folder);
     }
 
+    // A new file is moved into place, so it takes its size on the disk once; an existing target is
+    // written as before, never replaced.
+    const nodeFs = (await import("node:fs")).default;
+    const { syncBuiltinESMExports } = await import("node:module");
+    const renamedTo = [];
+    const rename = nodeFs.renameSync;
+    nodeFs.renameSync = (from, to) => { renamedTo.push(to); return rename(from, to); };
+    syncBuiltinESMExports();
+    try {
+      await h.run("meshy_download_model", { task_id: "r", task_type: "relief", format: "stl", save_to: path.join(dir, "moved", "plaque.stl") });
+      await h.run("meshy_download_model", { task_id: "r", task_type: "relief", format: "stl", save_to: path.join(dir, "moved", "plaque.stl") });
+    } finally {
+      nodeFs.renameSync = rename;
+      syncBuiltinESMExports();
+    }
+    assert.deepEqual(renamedTo.filter((to) => to.endsWith("plaque.stl")), [path.join(dir, "moved", "plaque.stl")], "moved the first time only");
+    assert.equal(read(path.join(dir, "moved", "plaque.stl")), "/model.stl");
+
     // A format the task was not made in: refused, naming the formats it has.
     const fbx = await h.run("meshy_download_model", { task_id: "r", task_type: "relief", format: "fbx", save_to: path.join(dir, "fbx", "plaque.fbx") });
     assert.equal(fbx.isError, true);

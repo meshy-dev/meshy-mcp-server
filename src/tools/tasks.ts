@@ -111,9 +111,11 @@ function fixObjForPrinting(filePath: string, targetHeightMm: number = 75): void 
 
 /**
  * Download url to saveTo and return the saved size. Each transfer is staged in a folder of its own
- * beside saveTo and written onto it only once complete, the way saveTo was always written (through
- * a symlink, refused on a read-only file, keeping its mode). A transfer that breaks off therefore
- * rejects and leaves whatever saveTo held, and concurrent downloads never share a staging file.
+ * beside saveTo and published only once complete: moved into place when nothing is at saveTo yet,
+ * so a new file takes its own size on the disk once; written onto an existing saveTo the way it was
+ * always written (through a symlink, refused on a read-only file, keeping its mode). A transfer
+ * that breaks off therefore rejects and leaves whatever saveTo held, and concurrent downloads never
+ * share a staging file.
  */
 async function downloadFileToLocal(url: string, saveTo: string): Promise<number> {
   // Ensure directory exists
@@ -131,7 +133,17 @@ async function downloadFileToLocal(url: string, saveTo: string): Promise<number>
   try {
     const staged = path.join(staging, "download");
     await pipeline(response.data, fs.createWriteStream(staged));
-    await pipeline(fs.createReadStream(staged), fs.createWriteStream(saveTo));
+    let exists = true;
+    try {
+      fs.lstatSync(saveTo);
+    } catch {
+      exists = false;
+    }
+    if (exists) {
+      await pipeline(fs.createReadStream(staged), fs.createWriteStream(saveTo));
+    } else {
+      fs.renameSync(staged, saveTo);
+    }
   } finally {
     fs.rmSync(staging, { recursive: true, force: true });
   }
