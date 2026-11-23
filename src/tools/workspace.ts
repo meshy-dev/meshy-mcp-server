@@ -12,7 +12,8 @@ import { Task, ModelSummary } from "../types.js";
 
 /** The formats a finished task can be downloaded in; empty when it has no model. */
 function modelFormats(task: Task): string[] {
-  const formats = Object.entries(task.model_urls ?? {}).filter(([, url]) => url).map(([format]) => format);
+  // The MTL comes with the OBJ; it is not a format of its own.
+  const formats = Object.entries(task.model_urls ?? {}).filter(([format, url]) => url && format !== "mtl").map(([format]) => format);
   // Rigging and animation tasks keep their files under result.
   const r = task.result;
   if (r?.rigged_character_glb_url || r?.animation_glb_url) formats.push("glb");

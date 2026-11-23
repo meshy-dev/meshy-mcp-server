@@ -315,8 +315,9 @@ function buildWaitSuccessResponse(
 
   // Available formats
   if (task.model_urls) {
+    // The MTL comes with the OBJ; it is not a format of its own.
     const formats = Object.keys(task.model_urls).filter(
-      k => task.model_urls![k as keyof typeof task.model_urls]
+      k => k !== "mtl" && task.model_urls![k as keyof typeof task.model_urls]
     );
     if (formats.length > 0) {
       lines.push(`## Available Formats`);

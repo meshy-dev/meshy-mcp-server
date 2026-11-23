@@ -714,6 +714,7 @@ test("relief tasks are read, listed and deleted on the relief route", async () =
     // A colored relief's texture comes back whatever formats it made.
     assert.deepEqual(out.texture_urls, [{ base_color: "https://example.invalid/texture_0.png" }]);
     assert.match(result.content[0].text, /texture_0\.png/);
+    assert.doesNotMatch(result.content[0].text, /\bMTL\b/, "the MTL comes with the OBJ, not as a format");
 
     const only = await h.run("meshy_get_task_status", { task_id: "d", task_type: "relief", wait });
     assert.equal(only.structuredContent.model_urls, undefined);
