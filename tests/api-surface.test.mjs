@@ -380,6 +380,8 @@ test("cancel deletes a finished task only after confirmation and explains refund
   const deleted = await done.run("meshy_cancel_task", { task_id: "t", confirm_delete: true });
   assert.deepEqual(done.deletes, ["/openapi/v1/image-to-3d/t"]);
   assert.match(deleted.structuredContent.message, /permanently/);
+  // A finished task stays finished: its confirmed delete may retry a transient failure.
+  assert.deepEqual(done.deleteOptions, [{ retry: true }]);
 
   const running = createHarness(registerTaskTools, { "/openapi/v1/image-to-3d/t": task("IN_PROGRESS", "image-to-3d") });
   const notStopped = await running.run("meshy_cancel_task", { task_id: "t", confirm_delete: true });
@@ -723,6 +725,12 @@ test("relief tasks are read, listed and deleted on the relief route", async () =
     assert.match(only.content[0].text, wait ? /Depth map only/ : /Available Formats\*\*: none/);
   }
   assert.match((await h.run("meshy_get_task_status", { task_id: "r", task_type: "relief" })).content[0].text, /Color: GLB, OBJ, FBX and USDZ/);
+  // A relief made only as STL: the next step names a format it has, not the GLB it lacks.
+  const stlOnly = createHarness(registerTaskTools, {
+    "/openapi/v1/relief/s": () => ({ ...colored(), id: "s", model_urls: { stl: "https://example.invalid/model.stl" } }),
+  });
+  assert.match((await stlOnly.run("meshy_get_task_status", { task_id: "s", task_type: "relief", wait: true })).content[0].text,
+    /format "stl" \(its formats: stl\)/);
 
   const listed = await h.run("meshy_list_tasks", { task_type: "relief" });
   assert.deepEqual(h.gets.at(-1), { path: "/openapi/v1/relief", query: { page_size: 20, page_num: 1, sort_by: "-created_at" } });
@@ -852,6 +860,14 @@ test("relief download saves the model, its depth map and, for OBJ, a folder hold
     assert.equal(read(path.join(project, "relief_depth.png")), "/depth.png");
     const meta = JSON.parse(read(path.join(project, "metadata.json")));
     assert.deepEqual(meta.tasks.map((t) => [t.task_type, t.stage, t.files]), [["relief", "relief", ["relief.stl", "relief_depth.png"]]]);
+    // An OBJ in its project folder: its files are recorded where they are, in its own folder.
+    const objTask = createHarness(registerTaskTools, { "/openapi/v1/relief/o": () => ({ ...relief(), id: "o" }) });
+    const managedObj = await objTask.run("meshy_download_model", { task_id: "o", task_type: "relief", format: "obj" });
+    const objProject = managedObj.structuredContent.project_dir;
+    assert.equal(managedObj.structuredContent.local_path, path.join(objProject, "relief", "relief.obj"));
+    const objMeta = JSON.parse(read(path.join(objProject, "metadata.json")));
+    assert.deepEqual(objMeta.tasks.at(-1).files,
+      [path.join("relief", "relief.obj"), path.join("relief", "model.mtl"), path.join("relief", "texture_0.png"), path.join("relief", "relief_depth.png")]);
   } finally {
     process.chdir(cwd);
     server.close();

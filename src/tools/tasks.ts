@@ -417,9 +417,14 @@ function buildWaitSuccessResponse(
   // Next steps
   // print-analyze produces metrics, not downloadable assets — skip the "use meshy_download_model" hint.
   if (taskType !== TaskType.PRINT_ANALYZE) {
+    // A relief has only the formats it was made in, and a GLB may not be one of them.
+    const reliefFormats = taskType === TaskType.RELIEF
+      ? Object.keys(task.model_urls ?? {}).filter(k => k !== "mtl" && task.model_urls![k as keyof typeof task.model_urls])
+      : [];
     lines.push("**Next Steps**: Use `meshy_download_model` with task_id \"" + taskId + "\"" +
       (taskType !== TaskType.TEXT_TO_3D ? ` and task_type "${taskType}"` : "") +
       (taskType === TaskType.MULTI_COLOR_PRINT ? ' and format "3mf"' : "") +
+      (reliefFormats.length > 0 && !reliefFormats.includes("glb") ? ` and format "${reliefFormats[0]}" (its formats: ${reliefFormats.join(", ")})` : "") +
       " to get the files.");
   }
 
@@ -610,7 +615,8 @@ ${expiryNote(task, false)}`
       stage,
       prompt: task.prompt,
       status: task.status,
-      files: saved.map(p => path.basename(p)),
+      // Relative to the project folder: an OBJ and its companions sit in a folder of their own.
+      files: saved.map(p => path.relative(projectDir!, p)),
       created_at: new Date().toISOString()
     });
   }
@@ -1087,8 +1093,9 @@ Returns { success, task_id, task_type, previous_status, message }.`,
           };
         }
 
-        // Sent once: a retry seconds later could reach a task that has finished meanwhile.
-        await client.delete(`${endpoint}/${params.task_id}`, { retry: false });
+        // A queued task's delete is sent once: a retry seconds later could reach a task that has
+        // finished meanwhile. Deleting a finished task, which the user confirmed, may retry.
+        await client.delete(`${endpoint}/${params.task_id}`, { retry: finished });
 
         const message = creativeLab
           ? previousStatus === TaskStatus.PENDING
