@@ -102,7 +102,12 @@ test("a task only its own route serves is still found, and real errors are not s
 });
 
 test("402, 409 and task errors carry the server's message and the next step", () => {
-  assert.match(handleMeshyError(httpError("post", 402, "Insufficient funds")), /Insufficient funds.*meshy_check_balance/);
+  const broke = handleMeshyError(httpError("post", 402, "Insufficient funds"));
+  assert.match(broke, /Insufficient funds\. Check the balance with `meshy_check_balance`\. Upgrade your plan for more monthly credits, or buy a credit pack: https:\/\/www\.meshy\.ai\/settings\/subscription\?utm_source=meshy-mcp-server&utm_medium=insufficient_credits$/);
+  // An API message with its own link gets no second one.
+  const linked = handleMeshyError(httpError("post", 402, "Insufficient funds. Upgrade your plan at https://www.meshy.ai/settings/subscription to continue using the API."));
+  assert.equal(linked.match(/https:\/\//g).length, 1);
+  assert.match(linked, /continue using the API\. Check the balance with `meshy_check_balance`\.$/);
   const busy = "Task is IN_PROGRESS and cannot be deleted. Credits for a task the worker has already started are not refundable";
   assert.match(handleMeshyError(httpError("delete", 409, busy)), /Conflict \(409\)\. Task is IN_PROGRESS.*not refundable\. A running task cannot be stopped.*confirm_delete/);
   assert.equal(

@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+## [0.6.13] - 2026-11-23
+
+### Changed
+
+- An out-of-credits error (HTTP 402) now links the subscription settings page, where you can
+  upgrade your plan for more monthly credits or buy a credit pack, instead of the pricing page.
+  The error still starts with the API's own message, and when that message already carries a link
+  the tool adds none, so you never see two.
+
 ## [0.6.12] - 2026-11-17
 
 ### Fixed

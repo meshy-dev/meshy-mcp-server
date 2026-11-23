@@ -3,7 +3,7 @@
  */
 
 import { AxiosError } from "axios";
-import { MAX_RETRIES, MAX_RETRY_AFTER_MS, RETRY_DELAYS } from "../constants.js";
+import { CREDITS_UPGRADE_HINT, MAX_RETRIES, MAX_RETRY_AFTER_MS, RETRY_DELAYS } from "../constants.js";
 import { RequestValidationError } from "../utils/generation-options.js";
 
 export interface MeshyError {
@@ -73,9 +73,12 @@ export function handleMeshyError(error: unknown, context?: ErrorContext): string
         case 401:
           return `Error: ${INVALID_API_KEY_MESSAGE}`;
 
-        case 402:
-          return `Error: Payment required (402). ${errorData?.message || "Insufficient credits."} ` +
-            "Check the balance with `meshy_check_balance`; add credits or upgrade at https://www.meshy.ai/pricing.";
+        case 402: {
+          const detail = String(errorData?.message || "Insufficient funds").replace(/\.?$/, ".");
+          // Some API answers link the subscription page already: never show two links.
+          const upgrade = /https?:\/\//.test(detail) ? "" : ` ${CREDITS_UPGRADE_HINT}`;
+          return `Error: Payment required (402). ${detail} Check the balance with \`meshy_check_balance\`.${upgrade}`;
+        }
 
         case 403: {
           const hint = tool === "meshy_list_usage"
@@ -184,7 +187,7 @@ function appendContextSuggestions(message: string, error: unknown, context?: Err
     const printToolHint = (tool === "meshy_repair_printability" || tool === "meshy_process_multicolor")
       ? ` This tool costs 10 credits per call; consider running \`meshy_analyze_printability\` (free) first to confirm the model needs repair before spending credits.`
       : "";
-    return message + `\n\n**Fix**: Use \`meshy_check_balance\` to verify credits, or upgrade at https://meshy.ai/pricing. Current tool: ${tool}.${printToolHint}`;
+    return message + `\n\n**Fix**: Use \`meshy_check_balance\` to verify credits. ${CREDITS_UPGRADE_HINT} Current tool: ${tool}.${printToolHint}`;
   }
 
   // Analyze-printability + Meshy 6 / Preview model requirement
