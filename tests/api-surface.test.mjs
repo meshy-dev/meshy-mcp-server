@@ -18,6 +18,7 @@ function createHarness(register, getResponses = {}) {
   const posts = [];
   const gets = [];
   const deletes = [];
+  const deleteOptions = [];
   let next = 0;
   const client = {
     async post(path, body) {
@@ -34,8 +35,9 @@ function createHarness(register, getResponses = {}) {
     async getWithRetryAfter(path) {
       return { data: await this.get(path) };
     },
-    async delete(path) {
+    async delete(path, options) {
       deletes.push(path);
+      deleteOptions.push(options);
       return {};
     },
   };
@@ -53,6 +55,7 @@ function createHarness(register, getResponses = {}) {
     posts,
     gets,
     deletes,
+    deleteOptions,
     schema: (name) => tools.get(name).schema,
     async run(name, input) {
       const { schema, handler } = tools.get(name);
@@ -385,7 +388,10 @@ test("cancel deletes a finished task only after confirmation and explains refund
   assert.deepEqual(running.deletes, []);
 
   const pending = createHarness(registerTaskTools, { "/openapi/v1/image-to-3d/t": task("PENDING", "image-to-3d") });
-  assert.match((await pending.run("meshy_cancel_task", { task_id: "t" })).structuredContent.message, /refunded/);
+  // A cancel decided on the status it read is sent once, and the reply does not promise a refund
+  // a task finishing in between would not get.
+  assert.match((await pending.run("meshy_cancel_task", { task_id: "t" })).structuredContent.message, /refunded, unless it finished/);
+  assert.deepEqual(pending.deleteOptions, [{ retry: false }]);
 
   const lab = createHarness(registerTaskTools, {
     "/openapi/creative-lab/figure/v1/build/t": task("IN_PROGRESS", "creative-lab-figure-build"),
@@ -727,7 +733,7 @@ test("relief tasks are read, listed and deleted on the relief route", async () =
   assert.match(deleted.structuredContent.message, /refunded/);
 });
 
-test("relief download saves the model, its depth map and, for OBJ, a material and texture named after it", async () => {
+test("relief download saves the model, its depth map and, for OBJ, a folder holding its material and texture", async () => {
   const { createServer } = await import("node:http");
   const fs = await import("node:fs");
   const os = await import("node:os");
@@ -772,20 +778,24 @@ test("relief download saves the model, its depth map and, for OBJ, a material an
     assert.equal(glb.structuredContent.depth_map_path, path.join(dir, "plaque_depth.png"));
     assert.equal(read(path.join(dir, "plaque_depth.png")), "/depth.png");
 
-    // OBJ: the MTL and texture are named after the model, and the OBJ and MTL point at them.
+    // OBJ: the OBJ, its MTL and its texture go into a folder of their own named after the model,
+    // under the names the OBJ and the MTL refer to, nothing rewritten; the depth map goes in too.
     const obj = await h.run("meshy_download_model", { task_id: "r", task_type: "relief", format: "obj", save_to: path.join(dir, "obj", "plaque.obj") });
     assert.notEqual(obj.isError, true, JSON.stringify(obj));
-    assert.equal(obj.structuredContent.mtl_path, path.join(dir, "obj", "plaque.mtl"));
-    assert.equal(read(path.join(dir, "obj", "plaque.obj")), "mtllib plaque.mtl\nusemtl m\nv 0 0 0\n");
-    assert.equal(read(path.join(dir, "obj", "plaque.mtl")), "newmtl m\nmap_Kd plaque_base_color.png\n");
-    assert.deepEqual(obj.structuredContent.texture_paths, [path.join(dir, "obj", "plaque_base_color.png")]);
-    assert.equal(read(path.join(dir, "obj", "plaque_base_color.png")), "/texture_0.png");
-    assert.equal(read(path.join(dir, "obj", "plaque_depth.png")), "/depth.png");
-    // A second OBJ saved into the same folder leaves the first one's material alone.
+    const set = path.join(dir, "obj", "plaque");
+    assert.equal(obj.structuredContent.local_path, path.join(set, "plaque.obj"));
+    assert.equal(obj.structuredContent.mtl_path, path.join(set, "model.mtl"));
+    assert.deepEqual(obj.structuredContent.texture_paths, [path.join(set, "texture_0.png")]);
+    assert.equal(obj.structuredContent.depth_map_path, path.join(set, "plaque_depth.png"));
+    assert.equal(read(path.join(set, "plaque.obj")), files["/model.obj"]);
+    assert.equal(read(path.join(set, "model.mtl")), files["/model.mtl"]);
+    assert.equal(read(path.join(set, "texture_0.png")), "/texture_0.png");
+    assert.deepEqual(fs.readdirSync(path.join(dir, "obj")), ["plaque"]);
+    // A second OBJ saved beside it gets its own folder; the first one's material is untouched.
     const other = await h.run("meshy_download_model", { task_id: "r", task_type: "relief", format: "obj", save_to: path.join(dir, "obj", "other.obj") });
     assert.notEqual(other.isError, true, JSON.stringify(other));
-    assert.equal(read(path.join(dir, "obj", "other.obj")), "mtllib other.mtl\nusemtl m\nv 0 0 0\n");
-    assert.equal(read(path.join(dir, "obj", "plaque.mtl")), "newmtl m\nmap_Kd plaque_base_color.png\n");
+    assert.equal(other.structuredContent.mtl_path, path.join(dir, "obj", "other", "model.mtl"));
+    assert.deepEqual(fs.readdirSync(path.join(dir, "obj")).sort(), ["other", "plaque"]);
 
     // STL stays white: no texture beside it.
     const stl = await h.run("meshy_download_model", { task_id: "r", task_type: "relief", format: "stl", save_to: path.join(dir, "stl", "plaque.stl") });
@@ -799,10 +809,10 @@ test("relief download saves the model, its depth map and, for OBJ, a material an
     });
     const failed = await failing.run("meshy_download_model", { task_id: "f", task_type: "relief", format: "obj", save_to: path.join(dir, "failed", "plaque.obj") });
     assert.equal(failed.structuredContent.download_url, `${base}/unavailable.obj`, JSON.stringify(failed));
-    assert.equal(failed.structuredContent.depth_map_path, path.join(dir, "failed", "plaque_depth.png"));
+    assert.equal(failed.structuredContent.depth_map_path, path.join(dir, "failed", "plaque", "plaque_depth.png"));
     assert.deepEqual(failed.structuredContent.not_saved.map((n) => [n.file, n.url]),
       [["obj", `${base}/unavailable.obj`], ["mtl", `${base}/model.mtl`], ["base_color", `${base}/texture_0.png`]]);
-    assert.deepEqual(fs.readdirSync(path.join(dir, "failed")), ["plaque_depth.png"]);
+    assert.deepEqual(fs.readdirSync(path.join(dir, "failed", "plaque")), ["plaque_depth.png"]);
 
     // The connection drops partway: no partial file is left, a file already at save_to keeps its
     // content, and the URL is handed out instead.

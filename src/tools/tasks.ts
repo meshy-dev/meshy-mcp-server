@@ -6,7 +6,6 @@ import { z } from "zod";
 import axios from "axios";
 import * as fs from "fs";
 import * as path from "path";
-import { Transform } from "stream";
 import { pipeline } from "stream/promises";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
@@ -111,11 +110,11 @@ function fixObjForPrinting(filePath: string, targetHeightMm: number = 75): void 
 }
 
 /**
- * Download url to saveTo, through transform when given, and return the saved size. The file is
+ * Download url to saveTo and return the saved size. The file is
  * written beside saveTo and moved onto it once complete, so a transfer that breaks off rejects,
  * leaves whatever saveTo held before, and lets the caller fall back to the URL.
  */
-async function downloadFileToLocal(url: string, saveTo: string, transform?: Transform): Promise<number> {
+async function downloadFileToLocal(url: string, saveTo: string): Promise<number> {
   // Ensure directory exists
   const dir = path.dirname(saveTo);
   if (!fs.existsSync(dir)) {
@@ -129,11 +128,7 @@ async function downloadFileToLocal(url: string, saveTo: string, transform?: Tran
 
   const partial = `${saveTo}.${process.pid}.${Date.now()}.part`;
   try {
-    if (transform) {
-      await pipeline(response.data, transform, fs.createWriteStream(partial));
-    } else {
-      await pipeline(response.data, fs.createWriteStream(partial));
-    }
+    await pipeline(response.data, fs.createWriteStream(partial));
     fs.renameSync(partial, saveTo);
   } catch (error) {
     fs.rmSync(partial, { force: true });
@@ -455,36 +450,35 @@ function buildWaitSuccessResponse(
 }
 
 /**
- * A stream that points an OBJ's first `mtllib` line at mtlName and passes everything else through
- * as it is. Only whole lines in the first 64 KiB are looked at, where the line is; an OBJ without
- * one there is written unchanged.
+ * The file a saved OBJ or MTL names on its first `keyword` line (mtllib, map_Kd), read from the
+ * file's start, as a bare file name: the named file is saved next to the one that names it.
  */
-function pointObjAtMtl(mtlName: string): Transform {
-  let head = Buffer.alloc(0);
-  let done = false;
-  return new Transform({
-    transform(chunk: Buffer, _encoding, callback) {
-      if (done) return callback(null, chunk);
-      head = Buffer.concat([head, chunk]);
-      const text = head.toString("latin1");
-      const complete = text.slice(0, text.lastIndexOf("\n") + 1);
-      const found = /^([ \t]*mtllib[ \t]+)[^\r\n]*/m.exec(complete);
-      if (!found && head.length < 64 * 1024) return callback();
-      done = true;
-      const out = found ? text.replace(/^([ \t]*mtllib[ \t]+)[^\r\n]*/m, `$1${mtlName}`) : text;
-      head = Buffer.alloc(0);
-      callback(null, Buffer.from(out, "latin1"));
-    },
-    flush(callback) {
-      callback(null, done ? undefined : head);
+function referencedFile(filePath: string, keyword: string): string | undefined {
+  try {
+    const fd = fs.openSync(filePath, "r");
+    try {
+      const head = Buffer.alloc(64 * 1024);
+      const read = fs.readSync(fd, head, 0, head.length, 0);
+      const line = head.toString("utf-8", 0, read).match(new RegExp(`^\\s*${keyword}\\s+(.+?)\\s*$`, "m"));
+      // The file name is the last token (map_Kd may put options such as -s 1 1 1 before it).
+      const name = line ? path.basename(line[1].split(/\s+/).pop() ?? "") : "";
+      return name && name !== "." && name !== ".." ? name : undefined;
+    } finally {
+      fs.closeSync(fd);
     }
-  });
+  } catch {
+    return undefined;
+  }
 }
 
-/** Point every `map_Kd` line of a saved MTL at textureName (its last token, after any options). */
-function pointMtlAtTexture(mtlPath: string, textureName: string): void {
-  const mtl = fs.readFileSync(mtlPath, "utf-8");
-  fs.writeFileSync(mtlPath, mtl.replace(/^([ \t]*map_Kd[ \t]+(?:\S+[ \t]+)*?)\S+[ \t]*$/gm, `$1${textureName}`));
+/** The file name at the end of a download URL's path, or fallback. */
+function urlFileName(url: string, fallback: string): string {
+  try {
+    const name = path.basename(decodeURIComponent(new URL(url).pathname));
+    return name && name !== "." && name !== ".." ? name : fallback;
+  } catch {
+    return fallback;
+  }
 }
 
 /**
@@ -534,12 +528,22 @@ async function downloadRelief(task: GetTaskResponse, params: z.infer<typeof Down
     if (!depthOnly) modelPath = getFilePath(projectDir, stage, fmt);
     depthPath = path.join(projectDir, `${stage}_depth.png`);
   }
+  // An OBJ, its MTL and its texture go into a folder of their own, named after the model, under
+  // the names the OBJ and the MTL refer to: nothing is renamed or rewritten, and another OBJ saved
+  // beside it keeps its own material. The depth map goes in with them.
+  const mtlUrl = fmt === "obj" && !depthOnly ? modelUrls.mtl : undefined;
+  if (mtlUrl && modelPath) {
+    const stem = path.basename(modelPath, path.extname(modelPath));
+    const objDir = path.join(path.dirname(modelPath), stem);
+    modelPath = path.join(objDir, path.basename(modelPath));
+    depthPath = path.join(objDir, `${stem}_depth.png`);
+  }
 
   const saved: string[] = [];
   const notSaved: { file: string; url: string; error: string }[] = [];
-  const save = async (file: string, url: string, target: string, transform?: Transform): Promise<number | undefined> => {
+  const save = async (file: string, url: string, target: string): Promise<number | undefined> => {
     try {
-      const size = await downloadFileToLocal(url, target, transform);
+      const size = await downloadFileToLocal(url, target);
       saved.push(target);
       return size;
     } catch (error) {
@@ -554,28 +558,27 @@ async function downloadRelief(task: GetTaskResponse, params: z.infer<typeof Down
   if (modelUrl && modelPath) {
     const dir = path.dirname(modelPath);
     const stem = path.basename(modelPath, path.extname(modelPath));
-    // The MTL and the texture are named after the model, and the OBJ and MTL are pointed at those
-    // names, so two OBJ downloads into one folder keep their own materials.
-    const mtlUrl = fmt === "obj" ? modelUrls.mtl : undefined;
-    const mtlTarget = path.join(dir, `${stem}.mtl`);
     const textureUrl = params.include_textures && RELIEF_COLOR_FORMATS.includes(fmt)
       ? firstTextureSet(task.texture_urls)?.base_color
       : undefined;
-    const textureTarget = !textureUrl
-      ? undefined
-      : projectDir
-        ? getTextureFilePath(projectDir, stage, "base_color", textureUrl)
-        : path.join(dir, `${stem}_base_color${textureUrl.split("?")[0].toLowerCase().includes(".png") ? ".png" : ".jpg"}`);
-    modelSize = await save(fmt, modelUrl, modelPath, mtlUrl ? pointObjAtMtl(path.basename(mtlTarget)) : undefined);
+    modelSize = await save(fmt, modelUrl, modelPath);
     if (modelSize === undefined) {
       // Without the model its companions name nothing: hand out their URLs with it.
       if (mtlUrl) notSaved.push({ file: "mtl", url: mtlUrl, error: "not downloaded: the model was not saved" });
       if (textureUrl) notSaved.push({ file: "base_color", url: textureUrl, error: "not downloaded: the model was not saved" });
     } else {
-      if (mtlUrl && await save("mtl", mtlUrl, mtlTarget) !== undefined) mtlPath = mtlTarget;
-      if (textureUrl && textureTarget && await save("base_color", textureUrl, textureTarget) !== undefined) {
-        texturePath = textureTarget;
-        if (mtlPath) pointMtlAtTexture(mtlPath, path.basename(textureTarget));
+      if (mtlUrl) {
+        const target = path.join(dir, referencedFile(modelPath, "mtllib") ?? urlFileName(mtlUrl, `${stem}.mtl`));
+        if (await save("mtl", mtlUrl, target) !== undefined) mtlPath = target;
+      }
+      if (textureUrl) {
+        const ext = textureUrl.split("?")[0].toLowerCase().includes(".png") ? ".png" : ".jpg";
+        const target = mtlUrl
+          ? path.join(dir, (mtlPath && referencedFile(mtlPath, "map_Kd")) ?? urlFileName(textureUrl, `${stem}_base_color${ext}`))
+          : projectDir
+            ? getTextureFilePath(projectDir, stage, "base_color", textureUrl)
+            : path.join(dir, `${stem}_base_color${ext}`);
+        if (await save("base_color", textureUrl, target) !== undefined) texturePath = target;
       }
     }
   }
@@ -1083,15 +1086,16 @@ Returns { success, task_id, task_type, previous_status, message }.`,
           };
         }
 
-        await client.delete(`${endpoint}/${params.task_id}`);
+        // Sent once: a retry seconds later could reach a task that has finished meanwhile.
+        await client.delete(`${endpoint}/${params.task_id}`, { retry: false });
 
         const message = creativeLab
           ? previousStatus === TaskStatus.PENDING
-            ? "Canceled; the credits were refunded."
+            ? "Canceled. It was still queued when checked, so its credits were refunded, unless it started in the moment between that check and the cancel."
             : "Canceled; credits for a task that had already started are not refunded."
           : finished
             ? "Deleted permanently, with its files (no refund)."
-            : "Deleted before it started; the credits were refunded.";
+            : "Deleted. It was still queued when checked, so its credits were refunded, unless it finished in the moment between that check and the delete (then it was deleted with no refund).";
 
         const output = {
           success: true,

@@ -48,6 +48,18 @@ test("reads and deletes retry transient failures, then give up", () => {
   assert.equal(retryDelayMs("get", httpError("get", 404, "Task not found"), 0), undefined);
 });
 
+test("a DELETE sent with retry false goes out once; by default it retries transient failures", async () => {
+  const { MeshyClient } = await import("../dist/services/meshy-client.js");
+  for (const [options, sent] of [[{ retry: false }, 1], [{}, 4]]) {
+    const client = new MeshyClient("key");
+    let calls = 0;
+    client.client = { request: async () => { calls++; throw httpError("delete", 503, "down"); } };
+    client.sleep = async () => {};
+    await assert.rejects(client.delete("/openapi/v1/relief/t", options), /down/);
+    assert.equal(calls, sent, JSON.stringify(options));
+  }
+});
+
 test("ambiguous create failures tell the agent to check before resending", () => {
   assert.match(handleMeshyError(networkError("post", "ECONNABORTED")), /may still have created/);
   assert.match(handleMeshyError(httpError("post", 502, "x")), /meshy_list_tasks/);
