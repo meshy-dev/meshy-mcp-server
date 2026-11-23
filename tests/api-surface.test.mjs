@@ -945,3 +945,25 @@ test("relief download saves the model, its depth map and, for OBJ, a folder hold
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test("two tasks created in the same second with no prompt get folders of their own", async () => {
+  const { resolveProjectDir } = await import("../dist/services/output-manager.js");
+  const fs = await import("node:fs");
+  const os = await import("node:os");
+  const path = await import("node:path");
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "meshy-projects-"));
+  const cwd = process.cwd();
+  process.chdir(dir);
+  try {
+    // Time-ordered ids made moments apart share their first characters.
+    const createdAt = Date.UTC(2026, 10, 23, 8, 0, 0);
+    const first = resolveProjectDir("0199c3d2-5a7e-7b14-9e2f-3c8d1a6b4f20", "relief", undefined, undefined, createdAt);
+    const second = resolveProjectDir("0199c3d2-5a7e-7b14-9e2f-77aa00bb11cc", "relief", undefined, undefined, createdAt);
+    assert.notEqual(first, second);
+    assert.match(path.basename(first), /_relief_1a6b4f20$/);
+  } finally {
+    process.chdir(cwd);
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
