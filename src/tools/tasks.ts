@@ -6,6 +6,7 @@ import { z } from "zod";
 import axios from "axios";
 import * as fs from "fs";
 import * as path from "path";
+import * as os from "os";
 import { pipeline } from "stream/promises";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
@@ -111,11 +112,12 @@ function fixObjForPrinting(filePath: string, targetHeightMm: number = 75): void 
 
 /**
  * Download url to saveTo and return the saved size. Each transfer is staged in a folder of its own
- * beside saveTo and published only once complete: moved into place when nothing is at saveTo yet,
- * so a new file takes its own size on the disk once; written onto an existing saveTo the way it was
- * always written (through a symlink, refused on a read-only file, keeping its mode). A transfer
- * that breaks off therefore rejects and leaves whatever saveTo held, and concurrent downloads never
- * share a staging file.
+ * and published only once complete: moved into place when nothing is at saveTo yet, so a new file
+ * takes its size on the disk once; written onto an existing saveTo the way it was always written
+ * (through a symlink, refused on a read-only file, keeping its mode). The staging folder sits
+ * beside saveTo, or, for an existing file in a folder that takes no new entries, in the system's
+ * temporary folder. A transfer that breaks off therefore rejects and leaves whatever saveTo held,
+ * and concurrent downloads never share a staging file.
  */
 async function downloadFileToLocal(url: string, saveTo: string): Promise<number> {
   // Ensure directory exists
@@ -123,22 +125,27 @@ async function downloadFileToLocal(url: string, saveTo: string): Promise<number>
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
-
-  const response = await axios.get(url, {
-    responseType: "stream",
-    timeout: 120000 // 120s timeout
-  });
-
-  const staging = fs.mkdtempSync(path.join(dir, ".meshy-download-"));
+  let exists = true;
   try {
+    fs.lstatSync(saveTo);
+  } catch {
+    exists = false;
+  }
+
+  let staging: string;
+  try {
+    staging = fs.mkdtempSync(path.join(dir, ".meshy-download-"));
+  } catch (error) {
+    if (!exists) throw error;
+    staging = fs.mkdtempSync(path.join(os.tmpdir(), "meshy-download-"));
+  }
+  try {
+    const response = await axios.get(url, {
+      responseType: "stream",
+      timeout: 120000 // 120s timeout
+    });
     const staged = path.join(staging, "download");
     await pipeline(response.data, fs.createWriteStream(staged));
-    let exists = true;
-    try {
-      fs.lstatSync(saveTo);
-    } catch {
-      exists = false;
-    }
     if (exists) {
       await pipeline(fs.createReadStream(staged), fs.createWriteStream(saveTo));
     } else {

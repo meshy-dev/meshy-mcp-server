@@ -855,6 +855,21 @@ test("relief download saves the model, its depth map and, for OBJ, a folder hold
     assert.equal(fs.lstatSync(path.join(dir, "link.stl")).isSymbolicLink(), true);
     assert.equal(read(real), "/model.stl");
     if (process.getuid?.() !== 0) {
+      // A folder that takes no new entries: its existing, writable file is still updated, staged
+      // in the system's temporary folder, and nothing is added to the folder.
+      const closed = path.join(dir, "closed");
+      fs.mkdirSync(closed);
+      fs.writeFileSync(path.join(closed, "plaque.stl"), "old");
+      fs.writeFileSync(path.join(closed, "plaque_depth.png"), "old");
+      fs.chmodSync(closed, 0o555);
+      try {
+        const updated = await h.run("meshy_download_model", { task_id: "r", task_type: "relief", format: "stl", save_to: path.join(closed, "plaque.stl") });
+        assert.equal(updated.structuredContent.local_path, path.join(closed, "plaque.stl"), JSON.stringify(updated));
+        assert.equal(read(path.join(closed, "plaque.stl")), "/model.stl");
+        assert.deepEqual(fs.readdirSync(closed).sort(), ["plaque.stl", "plaque_depth.png"]);
+      } finally {
+        fs.chmodSync(closed, 0o755);
+      }
       const locked = path.join(dir, "locked.stl");
       fs.writeFileSync(locked, "keep");
       fs.chmodSync(locked, 0o444);
