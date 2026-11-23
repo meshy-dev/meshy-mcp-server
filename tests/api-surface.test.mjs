@@ -751,10 +751,19 @@ test("relief download saves the model, its depth map and, for OBJ, a folder hold
     "/model.obj": "mtllib model.mtl\nusemtl m\nv 0 0 0\n",
     "/model.mtl": "newmtl m\nmap_Kd texture_0.png\n",
   };
+  let slowRequests = 0;
   const server = createServer((req, res) => {
     if (req.url === "/unavailable.obj") {
       res.statusCode = 503;
       return res.end("unavailable");
+    }
+    if (req.url === "/slow.stl") {
+      // Every second request sends half its body and ends 100 ms later, so it is still being
+      // written when a download started beside it has finished.
+      slowRequests += 1;
+      if (slowRequests % 2 === 1) return res.end("/slow.stl");
+      res.write("/slow");
+      return setTimeout(() => res.end(".stl"), 100);
     }
     if (req.url === "/cut.stl") {
       // The connection drops partway through the body.
@@ -834,6 +843,35 @@ test("relief download saves the model, its depth map and, for OBJ, a folder hold
     assert.equal(cut.structuredContent.download_url, `${base}/cut.stl`, JSON.stringify(cut));
     assert.deepEqual(fs.readdirSync(path.join(dir, "cut")).sort(), ["plaque.stl", "plaque_depth.png"]);
     assert.equal(read(path.join(dir, "cut", "plaque.stl")), "the user's own file");
+
+    // The target is written as it always was: through a symlink (the link stays a link), refused on
+    // a read-only file (left as it was, the URL handed out); two downloads to one path at once each
+    // stage on their own, and no staging folder is left behind.
+    const real = path.join(dir, "real.stl");
+    fs.writeFileSync(real, "old");
+    fs.symlinkSync(real, path.join(dir, "link.stl"));
+    const linked = await h.run("meshy_download_model", { task_id: "r", task_type: "relief", format: "stl", save_to: path.join(dir, "link.stl") });
+    assert.notEqual(linked.isError, true, JSON.stringify(linked));
+    assert.equal(fs.lstatSync(path.join(dir, "link.stl")).isSymbolicLink(), true);
+    assert.equal(read(real), "/model.stl");
+    if (process.getuid?.() !== 0) {
+      const locked = path.join(dir, "locked.stl");
+      fs.writeFileSync(locked, "keep");
+      fs.chmodSync(locked, 0o444);
+      const lockedRun = await h.run("meshy_download_model", { task_id: "r", task_type: "relief", format: "stl", save_to: locked });
+      assert.equal(lockedRun.structuredContent.download_url, `${base}/model.stl`, JSON.stringify(lockedRun));
+      assert.equal(read(locked), "keep");
+    }
+    const slow = createHarness(registerTaskTools, {
+      "/openapi/v1/relief/w": () => ({ ...relief(), id: "w", model_urls: { stl: `${base}/slow.stl` } }),
+    });
+    const both = await Promise.all([1, 2].map(() =>
+      slow.run("meshy_download_model", { task_id: "w", task_type: "relief", format: "stl", save_to: path.join(dir, "both", "plaque.stl") })));
+    for (const run of both) assert.equal(run.structuredContent.local_path, path.join(dir, "both", "plaque.stl"), JSON.stringify(run));
+    assert.equal(read(path.join(dir, "both", "plaque.stl")), "/slow.stl");
+    for (const folder of [dir, path.join(dir, "both"), path.join(dir, "cut")]) {
+      assert.deepEqual(fs.readdirSync(folder).filter((f) => f.startsWith(".meshy-download-")), [], folder);
+    }
 
     // A format the task was not made in: refused, naming the formats it has.
     const fbx = await h.run("meshy_download_model", { task_id: "r", task_type: "relief", format: "fbx", save_to: path.join(dir, "fbx", "plaque.fbx") });

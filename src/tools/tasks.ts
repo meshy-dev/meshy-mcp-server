@@ -110,9 +110,10 @@ function fixObjForPrinting(filePath: string, targetHeightMm: number = 75): void 
 }
 
 /**
- * Download url to saveTo and return the saved size. The file is
- * written beside saveTo and moved onto it once complete, so a transfer that breaks off rejects,
- * leaves whatever saveTo held before, and lets the caller fall back to the URL.
+ * Download url to saveTo and return the saved size. Each transfer is staged in a folder of its own
+ * beside saveTo and written onto it only once complete, the way saveTo was always written (through
+ * a symlink, refused on a read-only file, keeping its mode). A transfer that breaks off therefore
+ * rejects and leaves whatever saveTo held, and concurrent downloads never share a staging file.
  */
 async function downloadFileToLocal(url: string, saveTo: string): Promise<number> {
   // Ensure directory exists
@@ -126,13 +127,13 @@ async function downloadFileToLocal(url: string, saveTo: string): Promise<number>
     timeout: 120000 // 120s timeout
   });
 
-  const partial = `${saveTo}.${process.pid}.${Date.now()}.part`;
+  const staging = fs.mkdtempSync(path.join(dir, ".meshy-download-"));
   try {
-    await pipeline(response.data, fs.createWriteStream(partial));
-    fs.renameSync(partial, saveTo);
-  } catch (error) {
-    fs.rmSync(partial, { force: true });
-    throw error;
+    const staged = path.join(staging, "download");
+    await pipeline(response.data, fs.createWriteStream(staged));
+    await pipeline(fs.createReadStream(staged), fs.createWriteStream(saveTo));
+  } finally {
+    fs.rmSync(staging, { recursive: true, force: true });
   }
   return fs.statSync(saveTo).size;
 }
