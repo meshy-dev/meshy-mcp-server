@@ -66,7 +66,7 @@ export const DownloadModelInputSchema = z.object({
   task_type: TaskTypeSchema,
   format: z.enum(["glb", "fbx", "usdz", "stl", "obj", "blend", "3mf"])
     .optional()
-    .describe("Model format (default glb; omit for every Creative Lab part)."),
+    .describe("Model format (default glb, or a relief's first format when it has no GLB; omit for every Creative Lab part)."),
   include_textures: z.boolean()
     .default(true)
     .describe("Also save the texture maps"),
@@ -75,7 +75,7 @@ export const DownloadModelInputSchema = z.object({
     .describe("Absolute file path to save to instead of meshy_output/{timestamp}_{prompt}_{id}/"),
   parent_task_id: z.string()
     .optional()
-    .describe("Earlier task of the same chain (e.g. the preview of a refine); saves into its project folder."),
+    .describe("Earlier task of the same chain (e.g. the preview of a refine); saves into its project folder, where files of the same stage replace each other, so pass only a task of this chain."),
   print_ready: z.boolean()
     .optional()
     .describe("OBJ only: rotate Y-up to Z-up, scale to print_height_mm, center, bottom at Z=0. Changes only the local file (free); meshy_resize (1 credit) rescales the model on Meshy."),

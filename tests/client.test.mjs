@@ -48,6 +48,18 @@ test("reads and deletes retry transient failures, then give up", () => {
   assert.equal(retryDelayMs("get", httpError("get", 404, "Task not found"), 0), undefined);
 });
 
+test("a DELETE sent with retry false goes out once; by default it retries transient failures", async () => {
+  const { MeshyClient } = await import("../dist/services/meshy-client.js");
+  for (const [options, sent] of [[{ retry: false }, 1], [{}, 4]]) {
+    const client = new MeshyClient("key");
+    let calls = 0;
+    client.client = { request: async () => { calls++; throw httpError("delete", 503, "down"); } };
+    client.sleep = async () => {};
+    await assert.rejects(client.delete("/openapi/v1/relief/t", options), /down/);
+    assert.equal(calls, sent, JSON.stringify(options));
+  }
+});
+
 test("ambiguous create failures tell the agent to check before resending", () => {
   assert.match(handleMeshyError(networkError("post", "ECONNABORTED")), /may still have created/);
   assert.match(handleMeshyError(httpError("post", 502, "x")), /meshy_list_tasks/);
@@ -154,4 +166,31 @@ test("polling stops at the wait budget without failing the task, and stops on re
 
   const gone = { async get() { return pending; }, async getWithRetryAfter() { throw httpError("get", 404, "Task not found"); } };
   await assert.rejects(pollTask(gone, "t", "remesh", 600000, undefined, async () => {}), (e) => e.response?.status === 404);
+});
+
+test("relief tasks map to /openapi/v1/relief and are found there with or without task_type", async () => {
+  const { getTaskEndpoint, toTaskType, LIST_CAPABLE_TASK_TYPES, MODEL_TASK_TYPES, DEFAULT_LIST_TASK_TYPES, PROBE_TASK_TYPES } =
+    await import("../dist/utils/endpoints.js");
+  assert.equal(toTaskType("relief"), "relief");
+  assert.equal(toTaskType(" Relief "), "relief");
+  assert.equal(getTaskEndpoint("relief"), "/openapi/v1/relief");
+  assert.ok(LIST_CAPABLE_TASK_TYPES.includes("relief"));
+  assert.ok(MODEL_TASK_TYPES.includes("relief"));
+  assert.ok(PROBE_TASK_TYPES.includes("relief"));
+  assert.equal(DEFAULT_LIST_TASK_TYPES.includes("relief"), false);
+
+  const relief = { id: "r", type: "relief", status: "SUCCEEDED", model_urls: {}, depth_map_url: "d" };
+  const own = fakeClient({ "/openapi/v1/relief/r": relief });
+  const named = await getTaskWithAutoInference(own, "r", "relief");
+  assert.deepEqual([named.taskType, named.endpoint], ["relief", "/openapi/v1/relief"]);
+  assert.deepEqual(own.calls, ["/openapi/v1/relief/r"]);
+  const probed = await getTaskWithAutoInference(own, "r");
+  assert.equal(probed.taskType, "relief");
+  assert.deepEqual(probed.task, relief);
+
+  // If another route answers for it, the task's own type sends the read back to the relief route.
+  const shaped = fakeClient({ "/openapi/v1/image-to-3d/r": { id: "r", type: "relief", status: "SUCCEEDED" }, "/openapi/v1/relief/r": relief });
+  const reread = await getTaskWithAutoInference(shaped, "r", "image-to-3d");
+  assert.equal(reread.endpoint, "/openapi/v1/relief");
+  assert.deepEqual(reread.task, relief);
 });

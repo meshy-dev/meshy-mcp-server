@@ -30,6 +30,7 @@ import { registerConversionTools } from "./tools/conversion.js";
 import { registerImageTools } from "./tools/image.js";
 import { registerPrintingTools } from "./tools/printing.js";
 import { registerCreativeLabTools } from "./tools/creative-lab.js";
+import { registerReliefTools } from "./tools/relief.js";
 import { registerBalanceTool } from "./tools/balance.js";
 import { MESHY_INSTRUCTIONS } from "./instructions.js";
 import { VERSION } from "./version.js";
@@ -77,10 +78,13 @@ async function initializeServer(clientInfo?: () => HostInfo | undefined) {
     registerCreativeLabTools(server, meshyClient);
     console.error("  ✓ Creative Lab tool registered (end-to-end prototype→build)");
 
+    registerReliefTools(server, meshyClient);
+    console.error("  ✓ Relief tool registered (photo → bas-relief model and depth map)");
+
     registerBalanceTool(server, meshyClient);
     console.error("  ✓ Account tools registered (check-balance, list-usage)");
 
-    console.error("✓ Server initialized successfully with 28 tools");
+    console.error("✓ Server initialized successfully with 29 tools");
     return meshyClient;
   } catch (error) {
     console.error("Failed to initialize server:", error);

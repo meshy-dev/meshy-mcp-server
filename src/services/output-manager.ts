@@ -2,7 +2,7 @@
  * Output directory manager for Meshy generation tasks.
  *
  * Organizes all downloaded files under {cwd}/meshy_output/ with:
- *   - Per-project folders: {YYYYMMDD_HHmmss}_{prompt_slug}_{task_id_prefix}/
+ *   - Per-project folders: {YYYYMMDD_HHmmss}_{prompt_slug}_{task_id_tail}/
  *   - Auto-downloaded thumbnails
  *   - Per-project metadata.json tracking task chains
  *   - Global history.json index
@@ -94,6 +94,7 @@ export function inferStage(taskType: string, apiType?: string): string {
     case "animation": return "animated";
     case "multi-color-print": return "multicolor";
     case "print-split": return "split";
+    case "relief": return "relief";
     default: return "model";
   }
 }
@@ -188,12 +189,14 @@ export function resolveProjectDir(
     if (parentRoot) return parentRoot;
   }
 
-  // 3. Create new project folder: {YYYYMMDD_HHmmss}_{prompt_slug}_{task_id_prefix}
+  // 3. Create new project folder: {YYYYMMDD_HHmmss}_{prompt_slug}_{task_id_tail}
+  // The id's tail, not its head: task ids are time-ordered, so tasks created moments apart share
+  // their first characters, and two of them with no prompt would share a folder.
   const date = createdAt ? new Date(typeof createdAt === "number" ? createdAt : createdAt) : new Date();
   const timestamp = formatTimestamp(date);
   const slug = prompt ? slugify(prompt) : taskType;
-  const idPrefix = taskId.slice(0, 8);
-  const folderName = `${timestamp}_${slug}_${idPrefix}`;
+  const idTail = taskId.slice(-8);
+  const folderName = `${timestamp}_${slug}_${idTail}`;
 
   const projectDir = path.join(root, folderName);
   fs.mkdirSync(projectDir, { recursive: true });

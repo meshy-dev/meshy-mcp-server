@@ -10,7 +10,7 @@ export const MESHY_INSTRUCTIONS = `
 # Meshy AI — Workflow Guide
 
 Every create tool returns {task_id, status}, except meshy_creative_lab, which waits and returns the finished model. Wait for it with meshy_get_task_status (task_type is inferred when omitted), then meshy_download_model.
-Earlier results: meshy_list_models lists finished 3D models (image-to-3d by default; task_types widens it); meshy_list_tasks lists tasks of any status (default: text-to-3d, image-to-3d, multi-image-to-3d, text-to-image, image-to-image; task_types widens it, so an empty default list does not mean there are no printing, rigging or Creative Lab tasks).
+Earlier results: meshy_list_models lists finished 3D models (image-to-3d by default; task_types widens it); meshy_list_tasks lists tasks of any status (default: text-to-3d, image-to-3d, multi-image-to-3d, text-to-image, image-to-image; task_types widens it, so an empty default list does not mean there are no printing, rigging, relief or Creative Lab tasks).
 
 ## Rule 1: Cost Confirmation
 If the user hasn't said what the model is for (a game asset, a character to rig, a render, a 3D print, AR), ask before you pick models (Rule 4). A game asset or a face-count budget means smart topology (meshy-t2.5 / meshy-t2 with target_polycount), also on meshy_text_to_3d; never a meshy-7.1 model remeshed down.
@@ -27,6 +27,7 @@ Before calling ANY tool that costs credits, ask which ai_model to use where ther
 | meshy_repair_printability / meshy_process_multicolor / meshy_auto_split | 10 |
 | meshy_convert / meshy_resize | 1 |
 | meshy_creative_lab | 36; keycap 62; fidget-collapsible 6 |
+| meshy_relief | 20, depth map only included (paid plan) |
 | meshy_text_to_image / meshy_image_to_image | nano-banana 3, nano-banana-2 6, nano-banana-2-lite 3, nano-banana-2-1 4, nano-banana-pro 9; GPT Image models (gpt-image-2, gpt-image-2-5-flare, gpt-image-2-5-sunburst) 9 text / 12 image |
 | analyze printability, balance, usage, animation library, status, list, download | free |
 
@@ -138,6 +139,12 @@ Suggested flow:
 1. Check the source qualifies (see meshy_auto_split).
 2. Confirm the cost and how to cut: mode "auto", "by_parts" with a prompt naming 1–10 parts, or "by_color" (image-to-3d / multi-image-to-3d sources only). There is no bed-size parameter: resize to the print size first if parts must fit a bed, then check part sizes and re-split by_parts if one is still too big. Offer connectors so the pieces fit together, layout "on_plate" for print-ready placement, and target_formats ["3mf"] for separately selectable parts in a slicer.
 3. meshy_auto_split, wait, meshy_download_model, then open the file in a slicer (meshy_send_to_slicer).
+
+## Scenario M: Relief from a Photo
+Trigger: user wants a photo as a bas-relief, plaque or carved picture (3D print, laser engraving, CNC), or a depth / height map of a photo. A keychain or fridge magnet is Scenario J.
+Suggested flow:
+1. Confirm the use and the cost (20 credits): variant "high" for a 3D-printed piece, "low" (default) for laser engraving, CNC or a thin plaque; should_generate_model false when only the depth map is needed; size_mm, target_formats (default glb + stl) and color_mapping (GLB, OBJ, FBX, USDZ only). A relief task cannot feed other tools, so settle formats and size now.
+2. meshy_relief, wait (task_type "relief"), then meshy_download_model, which also saves the depth map; open an STL or 3MF in a slicer for printing.
 
 ## Scenario G: General 3D Model (default)
 Trigger: none of the above.

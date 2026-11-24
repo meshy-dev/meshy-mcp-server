@@ -142,7 +142,7 @@ IMAGE INPUT (exactly ONE):
   - input_task_id: a SUCCEEDED meshy_text_to_image / meshy_image_to_image task with ONE image (multi-view output → meshy_multi_image_to_3d)
 
 ${MODEL_CHOICE_GUIDE}
-Omit texture_model for the geometry's default; "none" is should_texture false; 2 to 4 photos go to meshy_multi_image_to_3d.
+Omit texture_model for the geometry's default; "none" is should_texture false; 2 to 4 photos go to meshy_multi_image_to_3d; a bas-relief or depth map of a photo goes to meshy_relief.
 
 Example (game character): { file_path: "/path/to/character.png", ai_model: "meshy-t2.5", target_polycount: 15000, texture_model: "meshy-n1", pose_mode: "t-pose" }`,
       inputSchema: ImageTo3DInputSchema,

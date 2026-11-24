@@ -91,19 +91,20 @@ export class MeshyClient {
   }
 
   /**
-   * Make a DELETE request with retry logic
+   * Make a DELETE request with retry logic. `retry: false` sends it once: a cancel decided on a
+   * status it read must not land seconds later, after the task may have finished.
    */
-  async delete<T>(endpoint: string): Promise<T> {
+  async delete<T>(endpoint: string, options: { retry?: boolean } = {}): Promise<T> {
     return (await this.requestWithRetry<T>({
       method: "DELETE",
       url: endpoint
-    })).data;
+    }, options.retry ?? true)).data;
   }
 
   /**
-   * Send a request, retrying as retryDelayMs allows for its method
+   * Send a request, retrying as retryDelayMs allows for its method (never when retry is false)
    */
-  private async requestWithRetry<T>(config: AxiosRequestConfig): Promise<AxiosResponse<T>> {
+  private async requestWithRetry<T>(config: AxiosRequestConfig, retry = true): Promise<AxiosResponse<T>> {
     if (!this.apiKey) {
       throw new MeshyAuthError(MISSING_API_KEY_MESSAGE);
     }
@@ -120,7 +121,7 @@ export class MeshyClient {
           throw new MeshyAuthError(INVALID_API_KEY_MESSAGE);
         }
 
-        const delay = retryDelayMs(config.method, error, attempt);
+        const delay = retry ? retryDelayMs(config.method, error, attempt) : undefined;
         if (delay === undefined) throw error;
 
         // Log retry attempt to stderr (not stdout for stdio transport)

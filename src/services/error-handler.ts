@@ -106,7 +106,7 @@ export function handleMeshyError(error: unknown, context?: ErrorContext): string
 
         case 429:
           if (isQueueFullError(error)) {
-            return `Error: Your task queue is full. ${errorData.message} Wait for one of your running tasks to finish before creating another (\`meshy_list_tasks\` with status IN_PROGRESS; its default covers generation and image tasks only, so pass task_types for printing, rigging, animation, motion, post-processing or Creative Lab tasks); retrying right away will not help.`;
+            return `Error: Your task queue is full. ${errorData.message} Wait for one of your running tasks to finish before creating another (\`meshy_list_tasks\` with status IN_PROGRESS; its default covers generation and image tasks only, so pass task_types for printing, rigging, animation, motion, post-processing, relief or Creative Lab tasks); retrying right away will not help.`;
           }
           return `Error: Rate limit exceeded (429). ${errorData?.message || ""} Wait a few seconds and try again.`;
 
