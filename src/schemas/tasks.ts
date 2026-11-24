@@ -66,7 +66,7 @@ export const DownloadModelInputSchema = z.object({
   task_type: TaskTypeSchema,
   format: z.enum(["glb", "fbx", "usdz", "stl", "obj", "blend", "3mf"])
     .optional()
-    .describe("Model format (default glb; omit for every Creative Lab part)."),
+    .describe("Model format (default glb, or a relief's first format when it has no GLB; omit for every Creative Lab part)."),
   include_textures: z.boolean()
     .default(true)
     .describe("Also save the texture maps"),

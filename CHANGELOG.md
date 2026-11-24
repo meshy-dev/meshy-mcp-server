@@ -2,6 +2,40 @@
 
 ## [Unreleased]
 
+Tools: 28 → 29.
+
+### Added
+
+- `meshy_relief` turns one photo into a bas-relief model and a 16-bit grayscale depth map, for 3D
+  printing, laser engraving and CNC carving (20 credits, paid plan). It takes every documented
+  parameter (`variant`, `should_generate_model` for the depth map alone, size, carving, base,
+  bend, `mesh_resolution`, `target_formats`, `color_mapping`), from `image_url` or `file_path`,
+  and refuses out-of-range values and a base thickness with `remove_base` before anything is
+  sent. `meshy_get_task_status`, `meshy_list_tasks` and `meshy_cancel_task` take
+  `task_type: "relief"`, and status output carries `depth_map_url` and a colored relief's
+  `texture_urls`. `meshy_download_model` saves the model and its depth map beside it: without
+  `format`, the GLB, or the first format the task was made in when it has no GLB. An OBJ goes into
+  a folder named after it with its MTL, texture and depth map, also with `save_to`
+  (`/x/plaque.obj` saves `/x/plaque/plaque.obj`), so two OBJs in one folder keep their own
+  materials.
+
+### Changed
+
+- New project folders under `meshy_output/` end with the last eight characters of the task id
+  instead of the first eight. Task ids are time-ordered, so two tasks created in the same second
+  with no prompt shared a folder and the second overwrote the first. Existing folders are still
+  found through their `metadata.json`.
+- Downloads are staged in a temporary folder beside the target and put in place only once
+  complete. A download that fails or loses its connection partway now returns the URL and leaves
+  what was at the path before; it used to leave a partial file, or never answer when the
+  connection dropped. An existing file is still overwritten in place, through a symlink and with
+  its permissions kept.
+- `meshy_cancel_task` sends the DELETE for a queued task once instead of retrying it, so a retry
+  can never reach a task that changed in the meantime. A confirmed delete of a finished task still
+  retries.
+- "Available Formats" in task status and `meshy_list_models` no longer lists an OBJ's MTL as a
+  format of its own.
+
 ## [0.6.13] - 2026-11-23
 
 ### Changed

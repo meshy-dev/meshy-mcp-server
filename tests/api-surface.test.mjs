@@ -390,9 +390,9 @@ test("cancel deletes a finished task only after confirmation and explains refund
   assert.deepEqual(running.deletes, []);
 
   const pending = createHarness(registerTaskTools, { "/openapi/v1/image-to-3d/t": task("PENDING", "image-to-3d") });
-  // A cancel decided on the status it read is sent once, and the reply does not promise a refund
-  // a task finishing in between would not get.
-  assert.match((await pending.run("meshy_cancel_task", { task_id: "t" })).structuredContent.message, /refunded, unless it finished/);
+  // A cancel decided on the status it read is sent once. The API refuses to delete a task that has
+  // started, so a delete that went through was of a queued task, refunded.
+  assert.match((await pending.run("meshy_cancel_task", { task_id: "t" })).structuredContent.message, /^Deleted before it started; the credits were refunded\.$/);
   assert.deepEqual(pending.deleteOptions, [{ retry: false }]);
 
   const lab = createHarness(registerTaskTools, {
@@ -939,6 +939,16 @@ test("relief download saves the model, its depth map and, for OBJ, a folder hold
     assert.match(fbx.content[0].text, /no FBX file\. Its formats: glb, stl, obj\./);
     assert.match(fbx.content[0].text, /target_formats/);
     assert.equal(fs.existsSync(path.join(dir, "fbx")), false);
+
+    // No format, and the task made no GLB: what it was made in is saved, not refused.
+    const stlOnly = createHarness(registerTaskTools, {
+      "/openapi/v1/relief/s": () => ({ ...RELIEF_DONE, id: "s", model_urls: { stl: `${base}/model.stl` }, depth_map_url: `${base}/depth.png` }),
+    });
+    const noFormat = await stlOnly.run("meshy_download_model", { task_id: "s", task_type: "relief", save_to: path.join(dir, "stl-only", "plaque.stl") });
+    assert.notEqual(noFormat.isError, true, JSON.stringify(noFormat));
+    assert.equal(noFormat.structuredContent.format, "stl");
+    assert.equal(read(path.join(dir, "stl-only", "plaque.stl")), "/model.stl");
+    assert.equal(read(path.join(dir, "stl-only", "plaque_depth.png")), "/depth.png");
 
     // Depth-map-only task: the depth map alone, and the reply says so.
     const depthOnly = createHarness(registerTaskTools, {

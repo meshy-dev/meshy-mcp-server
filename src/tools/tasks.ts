@@ -514,21 +514,22 @@ function urlFileName(url: string, fallback: string): string {
 }
 
 /**
- * Save a finished relief task: the model in params.format (default glb; an OBJ with its MTL and
- * texture) and the depth map next to it. A depth-map-only task has empty model_urls and saves the
- * depth map alone.
+ * Save a finished relief task: the model in params.format (default glb, else the first format the
+ * task was made in; an OBJ with its MTL and texture) and the depth map next to it. A depth-map-only
+ * task has empty model_urls and saves the depth map alone.
  */
 async function downloadRelief(task: GetTaskResponse, params: z.infer<typeof DownloadModelInputSchema>): Promise<CallToolResult> {
   const modelUrls = (task.model_urls ?? {}) as Record<string, string | undefined>;
   const formats = Object.keys(modelUrls).filter(k => modelUrls[k] && k !== "mtl");
   const depthUrl = task.depth_map_url || undefined;
   const depthOnly = formats.length === 0;
-  const fmt = params.format ?? "glb";
+  // Without format: a relief made without a GLB (target_formats ["stl"]) saves what it was made in.
+  const fmt = params.format ?? (depthOnly || formats.includes("glb") ? "glb" : formats[0]);
   const modelUrl = depthOnly ? undefined : modelUrls[fmt];
 
   if (!depthOnly && !modelUrl) {
     const how = (RELIEF_FORMATS as readonly string[]).includes(fmt)
-      ? `A relief task has only the formats listed in target_formats when it was created, and other tools cannot convert it: for ${fmt.toUpperCase()}, create a new relief task with "${fmt}" in target_formats (${RELIEF_CREDITS} credits).`
+      ? `Pass one of those as format. A relief task has only the formats listed in target_formats when it was created, and other tools cannot convert it: for ${fmt.toUpperCase()}, create a new relief task with "${fmt}" in target_formats (${RELIEF_CREDITS} credits).`
       : `Relief makes ${RELIEF_FORMATS.join(", ")} only.`;
     return {
       isError: true,
@@ -1129,7 +1130,9 @@ Returns { success, task_id, task_type, previous_status, message }.`,
             : "Canceled; credits for a task that had already started are not refunded."
           : finished
             ? "Deleted permanently, with its files (no refund)."
-            : "Deleted. It was still queued when checked, so its credits were refunded, unless it finished in the moment between that check and the delete (then it was deleted with no refund).";
+            // The API refuses to delete a task that has started (409), so a delete that went through
+            // was of a queued task.
+            : "Deleted before it started; the credits were refunded.";
 
         const output = {
           success: true,
@@ -1167,7 +1170,7 @@ Returns { success, task_id, task_type, previous_status, message }.`,
 
   - 3D tasks: ONE model format — ask the user which first (GLB viewing, OBJ white-model printing, 3MF multicolor printing, FBX game engines, USDZ AR, BLEND Blender); never download all. A format exists only if it was generated: 3mf needs target_formats ["3mf"] at creation, meshy_convert or meshy_process_multicolor.
   - Creative Lab: omit format to save every part.
-  - Relief: the model in format (only the target_formats it was created with; OBJ with its MTL and texture) plus its depth map PNG. A depth-map-only task saves the depth map.
+  - Relief: the model in format (only the target_formats it was created with; without format, GLB, else its first format) plus its depth map PNG. An OBJ goes into a folder named after it with its MTL, texture and depth map, also with save_to: "/x/plaque.obj" saves "/x/plaque/plaque.obj". A depth-map-only task saves the depth map.
   - Images and text-to-motion clips save their own files and ignore format.
   - Rigging and animation tasks are not saved: they return their file URLs.
 If a download fails, its URL is returned instead.
