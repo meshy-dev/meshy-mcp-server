@@ -6,6 +6,11 @@
 export const API_BASE_URL = process.env.MESHY_API_HOST || "https://api.meshy.ai";
 export const CHARACTER_LIMIT = parseInt(process.env.CHARACTER_LIMIT || "25000", 10);
 
+/** What an out-of-credits error tells the user to do next. The subscription page offers both. */
+export const CREDITS_UPGRADE_HINT =
+  "Upgrade your plan for more monthly credits, or buy a credit pack: " +
+  "https://www.meshy.ai/settings/subscription?utm_source=meshy-mcp-server&utm_medium=insufficient_credits";
+
 // Response Formats
 export enum ResponseFormat {
   MARKDOWN = "markdown",
