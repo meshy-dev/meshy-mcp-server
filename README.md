@@ -54,9 +54,9 @@ Authorization: Bearer msy_YOUR_API_KEY
 | **In-chat view** | `show_model`, `open_meshy_studio` |
 
 - **Retries never charge twice.** Every create tool takes a `request_id`: a new random UUID for each generation the user asks for, and the same one only to retry that call. For 30 days, a retry answers from the first call instead of creating a second task.
-- **Pictures in.** A picture comes in as a public `image_url`, as an `image_upload_id` from `create_upload`, or as `image_file` where the client attaches files itself.
-- **Files from the user's computer.** `create_upload` returns an upload URL. The client sends the file there in one HTTP PUT within 15 minutes, then passes the `upload_id` to a create tool within 24 hours. Images: PNG, JPEG or WebP, up to 20 MB. Models: GLB, glTF (buffers embedded), OBJ, FBX or STL, up to 100 MiB. Uploading spends no credits.
-- **In-chat view.** `show_model` and `open_meshy_studio` show a Meshy card in clients that can display MCP app UI.
+- **Pictures in.** `image_to_3d` and `image_to_image` take a picture as a public `image_url`, as an `image_upload_id` from `create_upload`, or as `image_file` where the client attaches files itself. `texture_model` takes its reference picture as `texture_image_url` or `texture_image_upload_id`, and a model file from the user's computer as `model_upload_id`.
+- **Files from the user's computer.** `create_upload` returns an upload URL. The client sends the file there in one HTTP PUT within 15 minutes, then passes the `upload_id` to a create tool within 24 hours. Images: PNG, JPEG or WebP, up to 20 MB. Models: GLB, glTF (buffers embedded), OBJ, FBX or STL, up to 100 MiB. Uploading spends no credits. Each account can upload up to 100 files and 2 GB a day (UTC).
+- **In-chat view.** `show_model` and `open_meshy_studio` show a Meshy card in clients that can display MCP app UI. Two more tools, `app_image_to_3d` and `app_image_to_image`, are the card's own and are marked app-only (`_meta.ui.visibility: ["app"]`). A client that ignores that marking lists them too.
 - Which tools and parameters a client sees can differ by client and region.
 
 ### Plans, credits and downloads

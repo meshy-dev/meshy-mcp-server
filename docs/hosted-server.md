@@ -6,7 +6,7 @@ The hosted server follows the [MCP authorization specification](https://modelcon
 
 ## Endpoints
 
-Read the endpoints from the metadata rather than hard-coding them. As published today:
+Clients find these endpoints through [discovery](#discovery); do not hard-code them. The table shows today's values, for reference:
 
 | | Global | China |
 |---|---|---|
@@ -66,10 +66,12 @@ A client gets a `client_id` in one of two ways. Either way it is a public client
 
 Other fields are ignored. Registrations are rate-limited per source address. On the consent page, Meshy marks a registered client as one it has not reviewed.
 
+A registered client that is never used is deleted an hour after it registers, and one that was used, 30 days after its last use. Its `client_id` then gets `invalid_client`: on that error, register again.
+
 #### Callbacks
 
 - **Loopback** callbacks are always accepted: `http://127.0.0.1`, `http://[::1]` or `http://localhost`, with any port and path. At authorization the port may differ from the registered one ([RFC 8252 §7.3](https://www.rfc-editor.org/rfc/rfc8252#section-7.3)); the rest must match exactly.
-- **Any other callback**, `https` or a private-use scheme, is accepted only when it is on Meshy's list of allowed callbacks, matched exactly as written.
+- **Any other callback**, `https` or a private-use scheme, is accepted only when Meshy has allowed that callback, matched exactly as written, or, for an `https` callback, its domain.
 - A callback that is not accepted is dropped from the registration. The registration fails with `invalid_redirect_uri` only when none is left, so **use the `redirect_uris` in the response**, not the ones you sent.
 
 ### Client ID metadata documents
