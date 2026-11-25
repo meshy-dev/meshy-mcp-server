@@ -75,6 +75,14 @@ test("a rigging create refused for a pose-estimate outage says nothing was creat
   // Without Retry-After, or on another route, a create 503 stays ambiguous.
   assert.match(handleMeshyError(rig503("/openapi/v1/rigging", {})), /may still have created/);
   assert.match(handleMeshyError(rig503("/openapi/v1/remesh", { "retry-after": "7" })), /may still have created/);
+  // Only a POST's 503 is that refusal: a 502 to the create stays ambiguous,
+  // and a GET on the same path never claims nothing was created.
+  const rig502 = rig503("/openapi/v1/rigging", { "retry-after": "7" });
+  rig502.response.status = 502;
+  assert.match(handleMeshyError(rig502), /may still have created/);
+  const rigGet = rig503("/openapi/v1/rigging", { "retry-after": "7" });
+  rigGet.config.method = "get";
+  assert.doesNotMatch(handleMeshyError(rigGet), /Nothing was created or charged/);
   // It is still never resent automatically.
   assert.equal(retryDelayMs("post", rig503("/openapi/v1/rigging", { "retry-after": "7" }), 0), undefined);
 });
