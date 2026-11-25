@@ -2,6 +2,85 @@
 
 [Model Context Protocol (MCP)](https://modelcontextprotocol.io) server for the [Meshy AI](https://www.meshy.ai) 3D generation platform. Enables AI agents to create, manage, and download 3D models, textures, images, rigged characters, and animations through natural conversation.
 
+## Hosted or local
+
+Meshy's MCP server comes in two forms:
+
+| | Hosted server | Local server (this package) |
+|---|---|---|
+| Runs | On Meshy's servers, at `https://mcp.meshy.ai/mcp` | On your computer, started by your MCP client |
+| Signs in with | Your Meshy account (OAuth), or an API key | An API key in `MESHY_API_KEY` |
+| Install | Nothing | Node.js 18 or later |
+| Tools | [Hosted tools](#hosted-tools) | [29 tools](#features), including rigging, 3D printing and saving files on your computer |
+
+## Hosted server
+
+### Endpoints
+
+| Region | MCP server URL | Sign in on |
+|---|---|---|
+| Global | `https://mcp.meshy.ai/mcp` | meshy.ai |
+| China | `https://mcp.meshy.cn/mcp` | meshy.cn |
+
+Each region has its own sign-in, and a token from one region is refused by the other.
+
+### Connect with your Meshy account
+
+Add the server URL to your MCP client as a remote server (Streamable HTTP). The client finds Meshy's sign-in by itself: it opens a Meshy page in your browser, where you sign in and approve the connection. There is no API key or client ID to configure.
+
+Any Meshy plan can connect, the free plan included. Generation spends your Meshy credits.
+
+To disconnect a client, revoke it under **Settings → Profile → Authorized apps** on the site you signed in on.
+
+### Connect with an API key
+
+A client that cannot sign in with OAuth can send a Meshy API key from the [Developer Console](https://www.meshy.ai/developers/keys) on every request:
+
+```
+Authorization: Bearer msy_YOUR_API_KEY
+```
+
+- A key with an IP allowlist is refused with `403 ip_not_authorized`: requests to the hosted server can arrive from addresses that are not yours, so the allowlist cannot be checked. Use a key without an IP allowlist.
+- Each key can make 20 requests per second. Over that, the server answers `429` with `Retry-After`.
+
+### Hosted tools
+
+| Category | Tools |
+|---|---|
+| **3D Generation** | `text_to_3d_preview`, `text_to_3d_refine`, `image_to_3d`, `texture_model` |
+| **Image Generation** | `text_to_image`, `image_to_image` |
+| **Files** | `create_upload` |
+| **Tasks & Account** | `get_task`, `list_tasks`, `download_model`, `get_balance` |
+| **In-chat view** | `show_model`, `open_meshy_studio` |
+
+- **Retries never charge twice.** Every create tool takes a `request_id`: a new random UUID for each generation the user asks for, and the same one only to retry that call. For 30 days, a retry answers from the first call instead of creating a second task.
+- **Pictures in.** A picture comes in as a public `image_url`, as an `image_upload_id` from `create_upload`, or as `image_file` where the client attaches files itself.
+- **Files from the user's computer.** `create_upload` returns an upload URL. The client sends the file there in one HTTP PUT within 15 minutes, then passes the `upload_id` to a create tool within 24 hours. Images: PNG, JPEG or WebP, up to 20 MB. Models: GLB, glTF (buffers embedded), OBJ, FBX or STL, up to 100 MiB. Uploading spends no credits.
+- **In-chat view.** `show_model` and `open_meshy_studio` show a Meshy card in clients that can display MCP app UI.
+- Which tools and parameters a client sees can differ by client and region.
+
+### Plans, credits and downloads
+
+- `get_balance` returns your credit balance and what each generation costs. Full price list: [pricing](https://docs.meshy.ai/en/api/pricing).
+- `get_task` lists a model's `formats` only when your plan can download it. `download_model` returns a link that expires within two days, and each download counts toward your monthly downloads where your plan has a limit.
+- Below the Pro plan, the 3D view of a model is an encrypted preview that only Meshy's viewer can open. It is not a download.
+
+### Troubleshooting
+
+| Answer | Meaning | What to do |
+|---|---|---|
+| `401` with `WWW-Authenticate` | No credential, or the token expired or was revoked. With an API key: the key is mistyped, revoked or expired. | The client refreshes its token or signs in again. With an API key, create a new one. |
+| `403 ip_not_authorized` | The API key has an IP allowlist. | Use a key without an IP allowlist. |
+| `429 rate_limit_exceeded` | The API key made more than 20 requests in a second. | Wait for `Retry-After`, then retry. |
+| `503` with `Retry-After` | Meshy could not check the credential just then. | Retry after `Retry-After`. The credential is still valid: do not sign in again. |
+| A tool result marked as an error | The tool refused the call, for example for too few credits or a parameter it does not take. | The message says why. |
+
+Building an MCP client? [Hosted server: OAuth and protocol details](docs/hosted-server.md) covers discovery, client registration, tokens and revocation.
+
+## Local server (npm package)
+
+Everything from here on is about the local server: it runs on your computer and calls the Meshy API with your API key.
+
 ## Features
 
 29 tools covering the full Meshy API:
