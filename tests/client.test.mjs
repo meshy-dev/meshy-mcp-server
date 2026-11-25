@@ -60,6 +60,33 @@ test("a DELETE sent with retry false goes out once; by default it retries transi
   }
 });
 
+test("a rigging create refused for a pose-estimate outage says nothing was created and when to retry", () => {
+  const rig503 = (url, headers) => {
+    const config = { method: "post", url, headers: {} };
+    return new AxiosError("unavailable", undefined, config, {},
+      { status: 503, data: { message: "The pose estimate this rig needs is temporarily unavailable. Retry the request." }, headers, config, statusText: "" });
+  };
+  for (const url of ["/openapi/v1/rigging", "/openapi/v2/rigging"]) {
+    const message = handleMeshyError(rig503(url, { "retry-after": "7" }), { tool: "meshy_rig" });
+    assert.match(message, /Nothing was created or charged/, url);
+    assert.match(message, /Wait 7 seconds/, url);
+    assert.doesNotMatch(message, /may still have created/, url);
+  }
+  // Without Retry-After, or on another route, a create 503 stays ambiguous.
+  assert.match(handleMeshyError(rig503("/openapi/v1/rigging", {})), /may still have created/);
+  assert.match(handleMeshyError(rig503("/openapi/v1/remesh", { "retry-after": "7" })), /may still have created/);
+  // Only a POST's 503 is that refusal: a 502 to the create stays ambiguous,
+  // and a GET on the same path never claims nothing was created.
+  const rig502 = rig503("/openapi/v1/rigging", { "retry-after": "7" });
+  rig502.response.status = 502;
+  assert.match(handleMeshyError(rig502), /may still have created/);
+  const rigGet = rig503("/openapi/v1/rigging", { "retry-after": "7" });
+  rigGet.config.method = "get";
+  assert.doesNotMatch(handleMeshyError(rigGet), /Nothing was created or charged/);
+  // It is still never resent automatically.
+  assert.equal(retryDelayMs("post", rig503("/openapi/v1/rigging", { "retry-after": "7" }), 0), undefined);
+});
+
 test("ambiguous create failures tell the agent to check before resending", () => {
   assert.match(handleMeshyError(networkError("post", "ECONNABORTED")), /may still have created/);
   assert.match(handleMeshyError(httpError("post", 502, "x")), /meshy_list_tasks/);
