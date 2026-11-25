@@ -45,6 +45,14 @@ Tools: 28 → 29.
   The error still starts with the API's own message, and when that message already carries a link
   the tool adds none, so you never see two.
 
+### Fixed
+
+- `meshy_rig` refused with 503 because the pose estimate is temporarily unavailable now says that
+  nothing was created or charged and how many seconds to wait (the API's `Retry-After`) before
+  calling it again. It used to say the create may have gone through and to check
+  `meshy_list_tasks` first. Other 5xx answers to a create are unchanged, and the create is still
+  never resent automatically.
+
 ## [0.6.12] - 2026-11-17
 
 ### Fixed
