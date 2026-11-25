@@ -112,8 +112,14 @@ export function handleMeshyError(error: unknown, context?: ErrorContext): string
 
         case 500:
         case 502:
-        case 503:
+        case 503: {
+          const wait = rigPoseUnavailableWait(error);
+          if (wait !== undefined) {
+            return `Error: The pose estimate this rig needs is temporarily unavailable (503). Nothing was created or charged. ` +
+              `Wait ${wait} seconds (the API's Retry-After), then call this tool again with the same input.`;
+          }
           return `Error: Meshy service is temporarily unavailable (${status}).${createNote(error)}`;
+        }
 
         default:
           return `Error: API request failed with status ${status}. ${errorData?.message || ""}${createNote(error)}`;
@@ -152,6 +158,20 @@ export function handleMeshyError(error: unknown, context?: ErrorContext): string
 }
 
 /** After an ambiguous create failure: tell the agent to look before it resends. */
+/**
+ * Seconds to wait when a rigging create was refused because its pose estimate
+ * is temporarily unavailable: POST /openapi/v{1,2}/rigging answered 503 with
+ * Retry-After. The API answers it before the charge and before the task is
+ * created, so unlike other create 5xx nothing may have gone through.
+ * Undefined for any other failure.
+ */
+function rigPoseUnavailableWait(error: AxiosError): number | undefined {
+  if (error.config?.method?.toUpperCase() !== "POST" || error.response?.status !== 503) return undefined;
+  if (!/\/openapi\/v[12]\/rigging\/?$/.test(String(error.config?.url ?? "").split("?")[0])) return undefined;
+  const ms = retryAfterMs(error);
+  return ms === undefined ? undefined : Math.max(1, Math.ceil(ms / 1000));
+}
+
 function createNote(error: AxiosError): string {
   if (!createOutcomeUnknown(error)) return "";
   return " This create request was not retried automatically: it may still have created (and charged) the task. " +

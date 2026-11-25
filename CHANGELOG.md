@@ -36,6 +36,14 @@ Tools: 28 → 29.
 - "Available Formats" in task status and `meshy_list_models` no longer lists an OBJ's MTL as a
   format of its own.
 
+### Fixed
+
+- `meshy_rig` refused with 503 because the pose estimate is temporarily unavailable now says that
+  nothing was created or charged and how many seconds to wait (the API's `Retry-After`) before
+  calling it again. It used to say the create may have gone through and to check
+  `meshy_list_tasks` first. Other 5xx answers to a create keep that message, and a create
+  answered 5xx is still never resent automatically.
+
 ## [0.6.13] - 2026-11-23
 
 ### Changed
